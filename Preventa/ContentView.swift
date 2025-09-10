@@ -63,7 +63,7 @@ struct ContentView: View {
                         }
 
                         Button {
-                            show("Continuing as guest (demo).")
+                            show("Continuing as guest (demo).)
                         } label: {
                             Text("Continue as Guest")
                                 .font(.callout.weight(.semibold))
