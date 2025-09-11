@@ -221,7 +221,7 @@ struct ForgotPasswordView: View {
                 .foregroundStyle(.secondary)
         }
         .padding()
-        .navigationTitle("Forgot Password")
+        .navigationTitle("Forgot Password?")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
