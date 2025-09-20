@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		40F989C12E7E361A00E51822 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 40F989C02E7E361A00E51822 /* GoogleService-Info.plist */; };
+		40F989C22E7E361A00E51822 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 40F989C02E7E361A00E51822 /* GoogleService-Info.plist */; };
+		40F989C32E7E361A00E51822 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 40F989C02E7E361A00E51822 /* GoogleService-Info.plist */; };
+		40F989C62E7E371F00E51822 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 40F989C52E7E371F00E51822 /* FirebaseAuth */; };
+		40F989C82E7E371F00E51822 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 40F989C72E7E371F00E51822 /* FirebaseCore */; };
+		40F989CA2E7E371F00E51822 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 40F989C92E7E371F00E51822 /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		26920A6A2E6A7EB40009F6A8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +36,7 @@
 		26920A5C2E6A7EB10009F6A8 /* Preventa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Preventa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		26920A692E6A7EB40009F6A8 /* PreventaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PreventaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		26920A732E6A7EB40009F6A8 /* PreventaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PreventaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		40F989C02E7E361A00E51822 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +62,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				40F989C82E7E371F00E51822 /* FirebaseCore in Frameworks */,
+				40F989C62E7E371F00E51822 /* FirebaseAuth in Frameworks */,
+				40F989CA2E7E371F00E51822 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +88,7 @@
 		26920A532E6A7EB10009F6A8 = {
 			isa = PBXGroup;
 			children = (
+				40F989C02E7E361A00E51822 /* GoogleService-Info.plist */,
 				26920A5E2E6A7EB10009F6A8 /* Preventa */,
 				26920A6C2E6A7EB40009F6A8 /* PreventaTests */,
 				26920A762E6A7EB40009F6A8 /* PreventaUITests */,
@@ -112,6 +126,9 @@
 			);
 			name = Preventa;
 			packageProductDependencies = (
+				40F989C52E7E371F00E51822 /* FirebaseAuth */,
+				40F989C72E7E371F00E51822 /* FirebaseCore */,
+				40F989C92E7E371F00E51822 /* FirebaseFirestore */,
 			);
 			productName = Preventa;
 			productReference = 26920A5C2E6A7EB10009F6A8 /* Preventa.app */;
@@ -195,6 +212,9 @@
 			);
 			mainGroup = 26920A532E6A7EB10009F6A8;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				40F989C42E7E369200E51822 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 26920A5D2E6A7EB10009F6A8 /* Products */;
 			projectDirPath = "";
@@ -212,6 +232,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				40F989C22E7E361A00E51822 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,6 +240,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				40F989C12E7E361A00E51822 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -226,6 +248,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				40F989C32E7E361A00E51822 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -550,6 +573,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		40F989C42E7E369200E51822 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		40F989C52E7E371F00E51822 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 40F989C42E7E369200E51822 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		40F989C72E7E371F00E51822 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 40F989C42E7E369200E51822 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		40F989C92E7E371F00E51822 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 40F989C42E7E369200E51822 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 26920A542E6A7EB10009F6A8 /* Project object */;
 }
