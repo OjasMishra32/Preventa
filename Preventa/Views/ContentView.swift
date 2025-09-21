@@ -12,9 +12,12 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ZStack {
+                // Background
                 LinearGradient(colors: [Color.purple.opacity(0.9), Color.blue.opacity(0.8)],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                     .ignoresSafeArea()
+                    .contentShape(Rectangle())                 // makes the whole bg tappable
+                    .onTapGesture { dismissKeyboard() }        // tap outside to hide keyboard
 
                 VStack(spacing: 24) {
                     // logo/title
@@ -37,10 +40,19 @@ struct ContentView: View {
 
                     // fields + actions
                     VStack(spacing: 16) {
-                        AuthField(icon: "envelope.fill", placeholder: "Email",
-                                  text: $email, isSecure: .constant(false))
-                        AuthField(icon: "lock.fill", placeholder: "Password",
-                                  text: $password, isSecure: $isSecure)
+                        AuthField(
+                            icon: "envelope.fill",
+                            placeholder: "Email",
+                            text: $email,
+                            isSecure: .constant(false)
+                        )
+
+                        AuthField(
+                            icon: "lock.fill",
+                            placeholder: "Password",
+                            text: $password,
+                            isSecure: $isSecure
+                        )
 
                         HStack {
                             Spacer()
@@ -49,7 +61,10 @@ struct ContentView: View {
                                 .foregroundStyle(.white.opacity(0.9))
                         }
 
-                        Button { signIn(email: email, password: password) } label: {
+                        Button {
+                            dismissKeyboard()
+                            signIn(email: email, password: password)
+                        } label: {
                             PrimaryButtonLabel(title: "Sign In")
                         }
 
@@ -69,35 +84,69 @@ struct ContentView: View {
                 }
                 .padding(.top, 40)
             }
-            .alert("Preventa", isPresented: $showAlert) { Button("OK", role: .cancel) {} } message: {
+            .alert("Preventa", isPresented: $showAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
                 Text(alertMessage)
             }
             // modern navigation (replaces hidden NavigationLink)
             .navigationDestination(isPresented: $goHome) {
                 HomeView()
             }
+            // Adds a "Done" button above the keyboard to dismiss it
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { dismissKeyboard() }
+                }
+            }
         }
     }
 
-    // helpers
-    private func show(_ message: String) { alertMessage = message; showAlert = true }
+    // MARK: - Helpers
+
+    private func show(_ message: String) {
+        alertMessage = message
+        showAlert = true
+        dismissKeyboard()
+    }
+
+    private func dismissKeyboard() {
+        // Works reliably even when the TextField is inside a custom view
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
 
     private func signIn(email: String, password: String) {
-        guard email.contains("@"), password.count >= 6 else {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard cleanEmail.contains("@"), cleanPassword.count >= 6 else {
             show("Enter a valid email and password.")
             return
         }
 
-        Auth.auth().signIn(withEmail: email, password: password) { _, error in
-            if let error = error { show("Sign-in failed: \(error.localizedDescription)"); return }
+        Auth.auth().signIn(withEmail: cleanEmail, password: cleanPassword) { _, error in
+            if let error = error {
+                show("Sign-in failed: \(error.localizedDescription)")
+                return
+            }
 
-            guard let user = Auth.auth().currentUser else { show("User not found."); return }
+            guard let user = Auth.auth().currentUser else {
+                show("User not found.")
+                return
+            }
+
             user.reload { err in
-                if let err = err { show("Couldn’t refresh account: \(err.localizedDescription)"); return }
+                if let err = err {
+                    show("Couldn’t refresh account: \(err.localizedDescription)")
+                    return
+                }
+
                 if user.isEmailVerified {
                     goHome = true
                 } else {
-                    show("Please verify your email before signing in.")
+                    show("Please verify your email before signing in. Check your inbox and spam folder for the verification email.")
                 }
             }
         }
