@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "Preventa Shield Logo Design.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -12,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "Preventa Shield Logo Design 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -23,6 +25,7 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "Preventa Shield Logo Design 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
