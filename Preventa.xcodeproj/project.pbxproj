@@ -39,9 +39,22 @@
 		40F989C02E7E361A00E51822 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		264D9D012E80C6AE00E6E2C9 /* Exceptions for "Preventa" folder in "Preventa" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 26920A5B2E6A7EB10009F6A8 /* Preventa */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		26920A5E2E6A7EB10009F6A8 /* Preventa */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				264D9D012E80C6AE00E6E2C9 /* Exceptions for "Preventa" folder in "Preventa" target */,
+			);
 			path = Preventa;
 			sourceTree = "<group>";
 		};
@@ -423,6 +436,12 @@
 				DEVELOPMENT_TEAM = X452LG6K72;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Preventa/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Allow camera access to capture photos that help analyze symptoms and support preventive guidance.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Allow microphone access to record your voice when you use voice input. ";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Allow photo library access so you can choose images to discuss with Preventa Pulse.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Allow speech recognition so your voice notes can be converted to text.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -451,6 +470,12 @@
 				DEVELOPMENT_TEAM = X452LG6K72;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Preventa/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Allow camera access to capture photos that help analyze symptoms and support preventive guidance.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Allow microphone access to record your voice when you use voice input. ";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Allow photo library access so you can choose images to discuss with Preventa Pulse.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Allow speech recognition so your voice notes can be converted to text.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
