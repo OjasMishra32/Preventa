@@ -119,11 +119,11 @@ struct HomeView: View {
                 case .plan:
                     StubScreen(title: "Plan")
                 case .meds:
-                    StubScreen(title: "Medications")
+                    MedTrackerView()
                 case .medsToday:
-                    StubScreen(title: "Today’s Medications")
+                    MedTrackerView()
                 case .learn:
-                    StubScreen(title: "Learn")
+                    LearningHubView()
                 case .visualChecks:
                     StubScreen(title: "Visuals")
                 case .checkIns:
@@ -301,7 +301,7 @@ private struct TodayCard: View {
     var body: some View {
         GlassCard {
             HStack(spacing: 16) {
-                ProgressRing(progress: progress, animate: $animate)
+                AnimatedProgressRing(progress: progress, animate: $animate)
                     .frame(width: 78, height: 78)
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -495,7 +495,7 @@ private struct GlassCard<Content: View>: View {
     }
 }
 
-private struct ProgressRing: View {
+private struct AnimatedProgressRing: View {
     let progress: CGFloat
     @Binding var animate: Bool
 

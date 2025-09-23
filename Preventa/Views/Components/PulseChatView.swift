@@ -27,6 +27,9 @@ extension View {
 struct PulseChatView: View {
     @StateObject private var vm = PulseChatVM()
     @GestureState private var dragOffsetX: CGFloat = 0
+    @State private var showTimeline = false
+    @State private var showBodyMap = false
+    @AppStorage("ui.focus") private var focus = false
 
     var body: some View {
         GeometryReader { geo in
@@ -36,25 +39,53 @@ struct PulseChatView: View {
             ZStack(alignment: .leading) {
                 PulseAnimatedBackground().ignoresSafeArea()
                     .contentShape(Rectangle())
-                    .simultaneousGesture(TapGesture().onEnded {          // tap background to dismiss
-                        hideKeyboard()
-                    })
+                    .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
 
-                // ===== Main content as a centered column =====
                 VStack(spacing: 0) {
-                    TopBar(title: vm.title,
-                           medsDue: vm.today.medsDue,
-                           checkinsDue: vm.today.checkinsDue,
-                           streak: vm.today.streak,
-                           onCloseDrawer: { withAnimation(.spring()) { vm.historyOpen.toggle() } },
-                           onExport: vm.exportSession,
-                           onDelete: vm.clearSession)
+                    // === Session Tabs ===
+                    SessionTabs(
+                        sessions: vm.sessions,
+                        currentId: vm.sessionId,
+                        onNew: { vm.historyOpen = false; vm.clearSession() },
+                        onSelect: { vm.loadSession($0) },
+                        onRename: { id, title in vm.sessions[id] = title }
+                    )
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .frame(maxWidth: columnWidth)
+                    .opacity(focus ? 0 : 1)
+                    .allowsHitTesting(!focus)
+
+                    // === Top Bar ===
+                    TopBar(
+                        title: vm.title,
+                        medsDue: vm.today.medsDue,
+                        checkinsDue: vm.today.checkinsDue,
+                        streak: vm.today.streak,
+                        onCloseDrawer: { withAnimation(.spring()) { vm.historyOpen.toggle() } },
+                        onExport: vm.exportSession,
+                        onDelete: vm.clearSession,
+                        onOpenTimeline: { showTimeline = true },
+                        onToggleFocus: { focus.toggle() },
+                        focusEnabled: focus
+                    )
                     .padding(.horizontal, 14)
                     .padding(.top, 8)
                     .frame(maxWidth: columnWidth)
 
+                    // === Today Pulse Card ===
+                    TodayPulseCard(strip: vm.today)
+                        .frame(maxWidth: columnWidth)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 6)
+                        .opacity(focus ? 0 : 1)
+                        .allowsHitTesting(!focus)
+
+                    // === Safety Banner ===
                     SafetyBanner()
                         .frame(maxWidth: columnWidth)
+                        .opacity(focus ? 0 : 1)
+                        .allowsHitTesting(!focus)
 
                     if let red = vm.redFlag {
                         RedFlagBanner(text: red, onResources: vm.openResources)
@@ -62,8 +93,11 @@ struct PulseChatView: View {
                             .padding(.horizontal, 14)
                             .padding(.top, 4)
                             .frame(maxWidth: columnWidth)
+                            .opacity(focus ? 0 : 1)
+                            .allowsHitTesting(!focus)
                     }
 
+                    // === Messages ===
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(spacing: 14) {
@@ -81,7 +115,6 @@ struct PulseChatView: View {
                                     )
                                     .id(msg.id)
                                 }
-
                                 RecapPill { vm.requestRecap() }
                                     .padding(.top, 4)
                             }
@@ -90,9 +123,7 @@ struct PulseChatView: View {
                             .frame(maxWidth: columnWidth, alignment: .center)
                             .frame(maxWidth: .infinity)
                         }
-                        .simultaneousGesture(TapGesture().onEnded {   // tap content to dismiss
-                            hideKeyboard()
-                        })
+                        .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
                         .onChange(of: vm.messages.count) { _, _ in
                             withAnimation(.easeOut(duration: 0.25)) {
                                 proxy.scrollTo(vm.messages.last?.id, anchor: .bottom)
@@ -100,16 +131,20 @@ struct PulseChatView: View {
                         }
                     }
 
+                    // === Chips ===
                     ChipsStrip(
                         contextChips: vm.contextChips,
                         starterChips: vm.starterChips,
                         onTap: { vm.insertChipAndSend($0) },
-                        onBodyMap: { vm.startFromBodyMap() }
+                        onBodyMap: { showBodyMap = true }
                     )
                     .padding(.horizontal, 14)
                     .padding(.bottom, 6)
                     .frame(maxWidth: columnWidth)
+                    .opacity(focus ? 0 : 1)
+                    .allowsHitTesting(!focus)
 
+                    // === Attachments ===
                     if !vm.attachments.isEmpty {
                         AttachmentPreviewRow(
                             items: vm.attachments,
@@ -121,6 +156,8 @@ struct PulseChatView: View {
                         .padding(.bottom, 4)
                         .transition(.opacity)
                         .frame(maxWidth: columnWidth)
+                        .opacity(focus ? 0 : 1)
+                        .allowsHitTesting(!focus)
                     }
 
                     if let pair = vm.comparePair {
@@ -129,6 +166,8 @@ struct PulseChatView: View {
                             .padding(.bottom, 4)
                             .transition(.opacity)
                             .frame(maxWidth: columnWidth)
+                            .opacity(focus ? 0 : 1)
+                            .allowsHitTesting(!focus)
                     }
 
                     if let banner = vm.bannerText {
@@ -136,9 +175,11 @@ struct PulseChatView: View {
                             .padding(.horizontal, 14)
                             .padding(.bottom, 4)
                             .frame(maxWidth: columnWidth)
+                            .opacity(focus ? 0 : 1)
+                            .allowsHitTesting(!focus)
                     }
 
-                    // Input bar (aware of attachments so Send works even with only photos)
+                    // === Input Bar (always visible, even in focus mode) ===
                     InputBar(
                         text: $vm.currentInput,
                         hasAttachments: !vm.attachments.isEmpty,
@@ -148,7 +189,7 @@ struct PulseChatView: View {
                             vm.sendMessage()
                         },
                         onTray: {
-                            hideKeyboard()        // collapse keyboard when opening tray
+                            hideKeyboard()
                             withAnimation(.spring()) { vm.showTray.toggle() }
                         },
                         onPhoto: { vm.pickFromLibrary = true },
@@ -158,10 +199,11 @@ struct PulseChatView: View {
                     )
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(.thinMaterial)
+                    .background(Color.black.opacity(0.6))
                     .frame(maxWidth: columnWidth)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .dynamicTypeSize(.xSmall ... .accessibility5) // 👈 enables accessibility text scaling
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 12, coordinateSpace: .local)
@@ -179,7 +221,6 @@ struct PulseChatView: View {
                         }
                 )
 
-                // Dim when drawer is open; tap to close
                 if vm.historyOpen {
                     Color.black.opacity(0.25)
                         .ignoresSafeArea()
@@ -188,19 +229,22 @@ struct PulseChatView: View {
                         }
                 }
 
-                // Drawer overlays instead of pushing content (prevents everything shifting right)
-                HistoryDrawer(sessions: vm.sessions,
-                              currentId: vm.sessionId,
-                              onSelect: { vm.loadSession($0) },
-                              onDelete: { vm.deleteSession($0) })
-                    .frame(width: drawerWidth)
-                    .offset(x: vm.historyOpen ? 0 : -drawerWidth - 20)
-                    .transition(.move(edge: .leading))
-                    .accessibilityHidden(!vm.historyOpen)
-                    .shadow(radius: 12, y: 4)
+                HistoryDrawer(
+                    sessions: vm.sessions,
+                    currentId: vm.sessionId,
+                    onSelect: { id in
+                        vm.sessions[id] = "New Chat"
+                        vm.loadSession(id)
+                    },
+                    onDelete: { vm.deleteSession($0) }
+                )
+                .frame(width: drawerWidth)
+                .offset(x: vm.historyOpen ? 0 : -drawerWidth - 20)
+                .transition(.move(edge: .leading))
+                .accessibilityHidden(!vm.historyOpen)
+                .shadow(radius: 12, y: 4)
             }
         }
-        // === Overlay the tray in the safe-area (prevents layout blow-outs) ===
         .safeAreaInset(edge: .bottom) {
             if vm.showTray {
                 AttachmentTray(
@@ -208,26 +252,102 @@ struct PulseChatView: View {
                     onCamera: vm.openCamera,
                     onLibrary: { vm.pickFromLibrary = true },
                     onVoiceDown: vm.voiceDown,
-                    onVoiceUp: vm.voiceUp,
-                    keepLocal: $vm.keepLocalOnly,
-                    blurFaces: $vm.blurFaces
+                    onVoiceUp: vm.voiceUp
                 )
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-                .background(.ultraThinMaterial)
+                .padding(.horizontal, 9)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
+                .background(Color.black.opacity(0.7))
                 .overlay(Divider().background(.white.opacity(0.2)), alignment: .top)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .photosPicker(isPresented: $vm.pickFromLibrary, selection: $vm.photoItems, matching: .images)
-        .onChange(of: vm.photoItems) { _, _ in vm.ingestPickedPhotos() } // iOS 17+ signature
+        .onChange(of: vm.photoItems) { _, _ in vm.ingestPickedPhotos() }
         .onAppear { vm.bootstrap() }
         .navigationBarBackButtonHidden(false)
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showBodyMap) {
+            BodyMapView()
+        }
+        .sheet(isPresented: $showTimeline) {
+            HealthTimelineView()
+        }
     }
 }
+
+private struct SessionTabs: View {
+    var sessions: [UUID: String]
+    var currentId: UUID
+    var onNew: () -> Void
+    var onSelect: (UUID) -> Void
+    var onRename: (UUID, String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button(action: onNew) {
+                    Label("New", systemImage: "plus")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Brand.glow, in: Capsule())
+                        .overlay(Capsule().stroke(Brand.chipStroke, lineWidth: 0.8))
+                        .foregroundStyle(Brand.textPrimary)
+                }
+                ForEach(sessions.sorted(by: { $0.value < $1.value }), id: \.key) { id, title in
+                    EditableTab(
+                        title: title.isEmpty ? "Untitled" : title,
+                        isActive: id == currentId,
+                        onCommit: { onRename(id, $0) },
+                        onTap: { onSelect(id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct EditableTab: View {
+    @State private var editing = false
+    @State private var draft = ""
+    var title: String
+    var isActive: Bool
+    var onCommit: (String) -> Void
+    var onTap: () -> Void
+
+    var body: some View {
+        Group {
+            if editing {
+                TextField("", text: $draft, onCommit: { editing = false; onCommit(draft) })
+                    .textInputAutocapitalization(.words)
+                    .disableAutocorrection(true)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Brand.surfaceA, in: Capsule())
+                    .overlay(Capsule().stroke(Brand.chipStroke))
+                    .foregroundStyle(Brand.textPrimary)
+                    .frame(minWidth: 110)
+            } else {
+                Button {
+                    Hx.tap()
+                    onTap()
+                } label: {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background((isActive ? AnyShapeStyle(Brand.glow) : AnyShapeStyle(Brand.surfaceA)), in: Capsule())
+                        .overlay(Capsule().stroke(Brand.chipStroke))
+                        .foregroundStyle(Brand.textPrimary)
+                }
+                .contextMenu {
+                    Button("Rename") { draft = title; editing = true }
+                }
+            }
+        }
+    }
+}
+
 
 // MARK: - models
 
@@ -335,6 +455,7 @@ final class PulseChatVM: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var currentInput: String = ""
     @Published var sending: Bool = false
+    
 
     // attachments / tray
     @Published var showTray: Bool = false
@@ -356,7 +477,7 @@ final class PulseChatVM: ObservableObject {
     @Published var historyOpen: Bool = false
 
     // sessions / titles
-    @Published var title: String = "preventa pulse"
+    @Published var title: String = "Preventa Pulse"
     let sessionId: UUID = UUID()
     @Published var sessions: [UUID: String] = [:]
     var today = TodayStrip(medsDue: 1, checkinsDue: 1, streak: 4)
@@ -373,9 +494,9 @@ final class PulseChatVM: ObservableObject {
 
     func bootstrap() {
         if messages.isEmpty {
-            messages.append(ChatMessage(text: "hey, i’m preventa pulse. tell me what’s going on — or tap the tray to share a photo. i’ll ask quick follow-ups and suggest safe next steps.", isUser: false))
+            messages.append(ChatMessage(text: "Hi, I’m Preventa Pulse. Tell me what’s going on — or tap the tray to share a photo. I’ll ask quick follow-ups and suggest safe next steps.", isUser: false))
         }
-        sessions[sessionId] = "new session"
+        sessions[sessionId] = "New Session"
     }
 
     // MARK: input
@@ -435,8 +556,12 @@ final class PulseChatVM: ObservableObject {
     }
 
     func openCamera() {
-        // SwiftUI doesn’t have a pure camera picker; surface library with Recents (works on device)
-        pickFromLibrary = true
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            banner("Camera not available on this device", error: true)
+            return
+        }
+        // You will need a UIViewControllerRepresentable to wrap UIImagePickerController
+        banner("Camera picker not yet implemented (stub).")
     }
 
     func addNote(to id: UUID) {
@@ -471,8 +596,13 @@ final class PulseChatVM: ObservableObject {
         var r=0, g=0, b=0, count=0
         for y in stride(from: 0, to: height, by: max(1, height/20)) {
             for x in stride(from: 0, to: width, by: max(1, width/20)) {
-                let idx = (y*cg.bytesPerRow) + x*4
-                b += Int(ptr[idx]); g += Int(ptr[idx+1]); r += Int(ptr[idx+2]); count += 1
+                let bytesPerPixel = cg.bitsPerPixel / 8
+                guard bytesPerPixel >= 3 else { continue }
+                let idx = (y * cg.bytesPerRow) + (x * bytesPerPixel)
+                b += Int(ptr[idx])
+                g += Int(ptr[idx+1])
+                r += Int(ptr[idx+2])
+                count += 1
             }
         }
         if count == 0 { return .unknown }
@@ -485,7 +615,8 @@ final class PulseChatVM: ObservableObject {
     private func autoCompareCandidate() {
         let kinds = Dictionary(grouping: attachments, by: { $0.kind })
         if let group = kinds.values.first(where: { $0.count >= 2 }) {
-            comparePair = (group[0].image, group[1].image)
+            let pair = Array(group.prefix(2))
+            comparePair = (pair[0].image, pair[1].image)
         } else {
             comparePair = nil
         }
@@ -551,7 +682,7 @@ final class PulseChatVM: ObservableObject {
             }
             await streamReply(reply)
 
-            if title == "new session" || title == "preventa pulse",
+            if title.lowercased() == "new session" || title.lowercased() == "preventa pulse",
                let first = messages.first(where: { $0.isUser })?.text {
                 let compact = first.lowercased().prefix(30)
                 title = String(compact)
@@ -571,17 +702,30 @@ final class PulseChatVM: ObservableObject {
         var buffer = ""
         for ch in text {
             buffer.append(ch)
-            if let last = messages.last, !last.isUser, last.text != "…" {
-                messages[messages.count - 1].text = buffer
+            if let lastIdx = messages.indices.last,
+               !messages[lastIdx].isUser {
+                messages[lastIdx].text = buffer
             } else {
-                messages.append(ChatMessage(text: buffer, isUser: false, actions: suggestedActions(for: buffer), confidenceNote: confidenceSuffix(for: buffer)))
+                messages.append(ChatMessage(text: buffer, isUser: false,
+                    actions: suggestedActions(for: buffer),
+                    confidenceNote: confidenceSuffix(for: buffer)))
             }
             try? await Task.sleep(nanoseconds: 12_000_000)
         }
         messages[messages.count - 1].actions = suggestedActions(for: text)
         messages[messages.count - 1].confidenceNote = confidenceSuffix(for: text)
+
+        // 🔴 Red-flag detection + mood update
         redFlag = detectRedFlags(text)
-        if tokenDebug { banner("chars ~\(text.count)  •  context msgs \(min(messages.count, historyLimit))", error: false) }
+        if redFlag != nil {
+            UserDefaults.standard.setValue("urgent", forKey: "ui.mood")
+        } else {
+            UserDefaults.standard.setValue("neutral", forKey: "ui.mood")
+        }
+
+        if tokenDebug {
+            banner("chars ~\(text.count)  •  context msgs \(min(messages.count, historyLimit))", error: false)
+        }
     }
 
     private func suggestedActions(for text: String) -> [InlineAction] {
@@ -591,6 +735,12 @@ final class PulseChatVM: ObservableObject {
         if lower.contains("check") || lower.contains("follow") { out.append(.followup6h) }
         if lower.contains("learn") || lower.contains("read") { out.append(.openLearn) }
         if lower.contains("med") || lower.contains("dose") { out.append(.logMed) }
+
+        // 🟢 Calm mood keywords
+        if lower.contains("relax") || lower.contains("breath") || lower.contains("sleep") {
+            UserDefaults.standard.setValue("calm", forKey: "ui.mood")
+        }
+
         return Array(Set(out))
     }
 
@@ -695,7 +845,7 @@ final class PulseChatVM: ObservableObject {
             case 403: return fail("forbidden (403): key lacks access to \(model).")
             case 429: return fail("rate limit (429): too many requests or out of quota.")
             default:
-                return fail("http \(e.status): \(e.body.prefix(200))")
+                return fail("http \(e.status): \(String(e.body.prefix(200)))")
             }
         } catch {
             return fail("network/json error: \(error.localizedDescription)")
@@ -715,7 +865,7 @@ final class PulseChatVM: ObservableObject {
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
         do {
             try handler.perform([req])
-            let text = req.results?
+            let text = (req.results as? [VNRecognizedTextObservation])?
                 .compactMap { $0.topCandidates(1).first?.string }
                 .joined(separator: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -770,7 +920,19 @@ final class PulseChatVM: ObservableObject {
         }
     }
 
-    func exportSession() { banner("exported as markdown/pdf (stub).") }
+    func exportSession() {
+        let md = messages.map { m in
+            let who = m.isUser ? "You" : "Preventa"
+            return "### \(who)\n\(m.text)\n"
+        }.joined(separator: "\n")
+
+        if let url = ReportExporter.export(markdown: md) {
+            banner("exported to \(url.lastPathComponent)")
+        } else {
+            banner("export failed", error: true)
+        }
+    }
+
 
     func clearSession() {
         messages.removeAll()
@@ -781,10 +943,22 @@ final class PulseChatVM: ObservableObject {
     }
 
     func loadSession(_ id: UUID) {
-        withAnimation(.spring()) { historyOpen = false }
+        guard id != sessionId else { return }
+        // Stub — you can save/load from disk later
+        messages.removeAll()
+        messages.append(ChatMessage(text: "Loaded session: “\(sessions[id] ?? "untitled")”", isUser: false))
+        banner("Session switched.")
     }
 
-    func deleteSession(_ id: UUID) { sessions.removeValue(forKey: id) }
+    func deleteSession(_ id: UUID) {
+        sessions.removeValue(forKey: id)
+        if id == sessionId {
+            messages.removeAll()
+            title = "new session"
+            sessions[sessionId] = title
+            banner("session reset.")
+        }
+    }
 
     func banner(_ text: String?, error: Bool = false) {
         bannerText = text
@@ -809,53 +983,77 @@ private struct TopBar: View {
     var onCloseDrawer: () -> Void
     var onExport: () -> Void
     var onDelete: () -> Void
+    var onOpenTimeline: () -> Void   // 👈 new callback
+    var onToggleFocus: () -> Void
+    var focusEnabled: Bool
+
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
+            // Left drawer toggle
             Button(action: onCloseDrawer) {
-                Image(systemName: "sidebar.leading")
-                    .font(.system(size: 18, weight: .semibold))
+                Image(systemName: "sidebar.left")
+                    .imageScale(.large)
                     .foregroundStyle(.white)
             }
-
-            Text(title.isEmpty ? "preventa pulse" : title)
-                .font(.system(.headline, design: .rounded).weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
 
             Spacer()
 
-            TodayStripView(medsDue: medsDue, checkinsDue: checkinsDue, streak: streak)
+            // Title
+            Text(title)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
 
+            Spacer()
+
+            // Menu with actions
             Menu {
-                Button("export", action: onExport)
-                Button("delete session", role: .destructive, action: onDelete)
+                Button("Export", action: onExport)
+                Button("Delete", action: onDelete)
+                Divider()
+                Button("Open Timeline", action: onOpenTimeline)
+                Button(focusEnabled ? "Exit Focus Mode" : "Enter Focus Mode", action: onToggleFocus)
             } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 18, weight: .semibold))
+                    .imageScale(.large)
                     .foregroundStyle(.white)
             }
         }
+        .padding(.vertical, 6)
+    }
+}
+private struct TodayPulseCard: View {
+    var strip: TodayStrip
+
+    var body: some View {
+        HStack(spacing: 12) {
+            MetricPill(icon: "pills", title: "Meds", value: "\(strip.medsDue)")
+            MetricPill(icon: "heart.text.square", title: "Check-ins", value: "\(strip.checkinsDue)")
+            MetricPill(icon: "flame", title: "Streak", value: "\(strip.streak)d")
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.2)))
+        .foregroundStyle(.white)
     }
 }
 
-private struct TodayStripView: View {
-    var medsDue: Int
-    var checkinsDue: Int
-    var streak: Int
+private struct MetricPill: View {
+    var icon: String
+    var title: String
+    var value: String
+
     var body: some View {
         HStack(spacing: 8) {
-            Label("\(medsDue)", systemImage: "pills.fill")
-            Label("\(checkinsDue)", systemImage: "checkmark.circle.fill")
-            Label("\(streak)", systemImage: "flame.fill")
+            Image(systemName: icon).imageScale(.medium)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.caption2).opacity(0.9)
+                Text(value).font(.headline.weight(.semibold))
+            }
         }
-        .font(.caption2.weight(.semibold))
-        .labelStyle(.iconOnly)
-        .foregroundStyle(.white.opacity(0.9))
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(.white.opacity(0.18), lineWidth: 1))
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Color.white.opacity(0.06), in: Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.2)))
     }
 }
 
@@ -863,7 +1061,7 @@ private struct SafetyBanner: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "cross.case").imageScale(.small)
-            Text("i’m here for education + self-care — not a diagnosis. get urgent help for red-flag symptoms.")
+            Text("I’m here to support education and self-care — not to diagnose. Seek urgent help for any red-flag symptoms.")
                 .font(.caption)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
@@ -879,6 +1077,8 @@ private struct SafetyBanner: View {
 private struct RedFlagBanner: View {
     let text: String
     var onResources: () -> Void
+    @State private var pulse = false
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -891,9 +1091,19 @@ private struct RedFlagBanner: View {
         }
         .foregroundStyle(.white)
         .padding(10)
-        .background(LinearGradient(colors: [.red.opacity(0.7), .orange.opacity(0.7)], startPoint: .leading, endPoint: .trailing),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            LinearGradient(colors: [.red.opacity(0.75), .orange.opacity(0.75)],
+                           startPoint: .leading, endPoint: .trailing),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.2), lineWidth: 1))
+        .scaleEffect(pulse ? 1.02 : 1.0)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+        .accessibilityHint("Urgent health notice")
     }
 }
 
@@ -924,43 +1134,70 @@ private struct MessageRow: View {
     var onLogMed: () -> Void
     var speak: () -> Void
 
+    @State private var showReactions = false
+
     var body: some View {
         VStack(alignment: message.isUser ? .trailing : .leading, spacing: 8) {
-            HStack {
-                if message.isUser { Spacer() }
-                TextRenderer(message: message.text)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(bubbleBackground(isUser: message.isUser))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(LinearGradient(colors: [.white.opacity(0.18), .clear],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: 520, alignment: message.isUser ? .trailing : .leading) // sane bubble width on iPad
-                    .contextMenu {
-                        Button("copy", action: onCopy)
-                        Button("edit & resend", action: onEditResend)
-                        Button(message.bookmarked ? "remove bookmark" : "bookmark", action: onBookmark)
+            HStack(alignment: .bottom, spacing: 8) {
+                if !message.isUser {
+                    Avatar(kind: .ai)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    TextRenderer(message: message.text)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(bubbleBackground(isUser: message.isUser))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(LinearGradient(
+                                    colors: [.white.opacity(0.18), .clear],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ), lineWidth: 1)
+                        )
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: 520, alignment: message.isUser ? .trailing : .leading)
+                        .onTapGesture(count: 2) { showReactions.toggle() }
+                        .contextMenu {
+                            Button("copy", action: onCopy)
+                            Button("edit & resend", action: onEditResend)
+                            Button(message.bookmarked ? "remove bookmark" : "bookmark", action: onBookmark)
+                        }
+
+                    if let c = message.confidenceNote, !message.isUser {
+                        ConfidenceMeter(note: c)
                     }
-                    .accessibilityLabel(message.text)
-                if !message.isUser { Spacer() }
+
+                    if !message.attachments.isEmpty {
+                        AttachmentPreviewRowStatic(items: message.attachments)
+                    }
+
+                    if !message.isUser && !message.actions.isEmpty {
+                        InlineActionRow(
+                            actions: message.actions,
+                            onAddPlan: onAddPlan,
+                            onFollowup: onStartFollowup,
+                            onOpenLearn: onOpenLearn,
+                            onLogMed: onLogMed,
+                            onSpeak: speak
+                        )
+                    }
+                }
+
+                if message.isUser {
+                    Avatar(kind: .user)
+                }
             }
 
-            if !message.attachments.isEmpty {
-                AttachmentPreviewRowStatic(items: message.attachments)
-            }
-
-            if let c = message.confidenceNote, !message.isUser {
-                Text(c).font(.caption2).foregroundStyle(.white.opacity(0.9))
-            }
-
-            if !message.isUser && !message.actions.isEmpty {
-                InlineActionRow(actions: message.actions,
-                                onAddPlan: onAddPlan,
-                                onFollowup: onStartFollowup,
-                                onOpenLearn: onOpenLearn,
-                                onLogMed: onLogMed,
-                                onSpeak: speak)
+            if showReactions {
+                HStack(spacing: 10) {
+                    Reaction("hand.thumbsup")
+                    Reaction("heart.fill")
+                    Reaction("bookmark.fill", action: onBookmark)
+                    Reaction("speaker.wave.2.fill", action: speak)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: message.bookmarked)
@@ -977,6 +1214,57 @@ private struct MessageRow: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+        }
+    }
+}
+private enum AvatarKind { case ai, user }
+
+private struct Avatar: View {
+    var kind: AvatarKind
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.white.opacity(0.08))
+            Image(systemName: kind == .ai ? "sparkles" : "person.crop.circle.fill")
+                .imageScale(.medium)
+                .foregroundStyle(.white)
+        }
+        .frame(width: 28, height: 28)
+        .overlay(Circle().stroke(Color.white.opacity(0.2)))
+    }
+}
+
+private struct Reaction: View {
+    var systemName: String
+    var action: (() -> Void)? = nil
+    init(_ name: String, action: (() -> Void)? = nil) {
+        self.systemName = name
+        self.action = action
+    }
+
+    var body: some View {
+        Button {
+            action?()
+        } label: {
+            Image(systemName: systemName).imageScale(.medium)
+                .padding(6)
+                .background(Color.white.opacity(0.06), in: Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ConfidenceMeter: View {
+    var note: String
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.yellow.opacity(0.9))
+                .frame(width: 42, height: 4)
+            Text(note)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.9))
         }
     }
 }
@@ -1014,7 +1302,7 @@ private struct InlineActionRow: View {
                     case .logMed: ChipButton(title: action.title, icon: action.icon, action: onLogMed)
                     }
                 }
-                ChipButton(title: "speak reply", icon: "speaker.wave.2.fill", action: onSpeak)
+                ChipButton(title: "Speak Reply", icon: "speaker.wave.2.fill", action: onSpeak)
             }
         }
     }
@@ -1063,8 +1351,6 @@ private struct AttachmentTray: View {
     var onLibrary: () -> Void
     var onVoiceDown: () -> Void
     var onVoiceUp: () -> Void
-    @Binding var keepLocal: Bool
-    @Binding var blurFaces: Bool
 
     var body: some View {
         let compact = (hSizeClass == .compact)
@@ -1072,22 +1358,29 @@ private struct AttachmentTray: View {
             // Row 1: primary actions
             HStack(spacing: 10) {
                 PhotosPicker(selection: $selection, matching: .images) {
-                    TrayButton(icon: "photo.on.rectangle", title: "photos")
+                    TrayButton(icon: "photo.on.rectangle", title: "Photos")
                         .frame(minWidth: 0, maxWidth: compact ? .infinity : nil)
                 }
                 Button(action: onCamera) {
-                    TrayButton(icon: "camera.fill", title: "camera")
+                    TrayButton(icon: "camera.fill", title: "Camera")
                         .frame(minWidth: 0, maxWidth: compact ? .infinity : nil)
                 }
                 Button(action: onLibrary) {
-                    TrayButton(icon: "folder", title: "library")
+                    TrayButton(icon: "folder", title: "Library")
                         .frame(minWidth: 0, maxWidth: compact ? .infinity : nil)
                 }
+                Button {} label: {
+                    TrayButton(icon: "checklist", title: "Journal")
+                }
+                Button {} label: {
+                    TrayButton(icon: "drop", title: "Hydration")
+                }
+                
                 if !compact { Spacer(minLength: 8) }
                 Button {} label: {
                     HStack(spacing: 6) {
                         Image(systemName: "waveform.circle.fill").imageScale(.medium)
-                        Text("hold to talk").font(.caption.weight(.semibold))
+                        Text("Talk").font(.caption.weight(.semibold))
                     }
                     .padding(.horizontal, 10).padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: Capsule())
@@ -1099,16 +1392,6 @@ private struct AttachmentTray: View {
                         .onEnded { _ in onVoiceUp() }
                 )
             }
-
-            // Row 2: options (wraps nicely on compact)
-            HStack(spacing: 12) {
-                Toggle(isOn: $keepLocal) { Text("keep local").font(.caption2) }
-                    .toggleStyle(SwitchToggleStyle(tint: .white))
-                Toggle(isOn: $blurFaces) { Text("blur").font(.caption2) }
-                    .toggleStyle(SwitchToggleStyle(tint: .white))
-                Spacer(minLength: 0)
-            }
-            .opacity(0.95)
         }
         .foregroundStyle(.white)
     }
@@ -1205,25 +1488,50 @@ private struct BeforeAfterCompare: View {
 }
 
 private struct ChipsStrip: View {
+    @State private var expanded = false
     var contextChips: [String]
     var starterChips: [String]
     var onTap: (String) -> Void
     var onBodyMap: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(contextChips, id: \.self) { c in ChipButton(title: c, icon: "sparkles", action: { onTap(c) }) }
-                    Button(action: onBodyMap) { ChipButton(title: "body map", icon: "figure.arms.open", action: onBodyMap) }
-                        .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Shortcuts")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { expanded.toggle() }
+                } label: {
+                    Image(systemName: expanded ? "chevron.down.circle.fill" : "chevron.up.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(LinearGradient(colors: [Color.blue, Color.purple],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing))
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(starterChips, id: \.self) { c in ChipButton(title: c, icon: "bolt.heart", action: { onTap(c) }) }
+
+            if expanded {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(contextChips, id: \.self) { c in
+                            ChipButton(title: c, icon: "sparkles", action: { onTap(c) })
+                        }
+                        ChipButton(title: "body map", icon: "figure.arms.open", action: onBodyMap)
+                    }
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(starterChips, id: \.self) { c in
+                            ChipButton(title: c, icon: "bolt.heart", action: { onTap(c) })
+                        }
+                    }
                 }
             }
         }
+        .foregroundStyle(.white)
+        .padding(.top, 6)
     }
 }
 
@@ -1245,38 +1553,52 @@ private struct InputBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onTray) {
-                Image(systemName: "plus.circle").font(.system(size: 26, weight: .semibold))
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
             }
-            .foregroundStyle(.white)
 
-            // Return key sends; toolbar provides explicit "Send" button on keyboard as fallback
-            TextField("message preventa pulse…", text: $text, axis: .vertical)
-                .lineLimit(1...4)
-                .submitLabel(.send)
-                .onSubmit {
-                    if !disabledSend { onSend() }
-                }
-                .textInputAutocapitalization(.sentences)
-                .disableAutocorrection(false)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.18), lineWidth: 1))
-                .foregroundStyle(.white)
-                .font(.system(.body, design: .rounded))
-                .accessibilityLabel("message field")
-                .toolbar {                                  // iOS 15+; shows above keyboard
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Send") { onSend() }
-                            .disabled(disabledSend)
-                    }
+            ZStack(alignment: .leading) {
+                if text.isEmpty {
+                    Text("Message Preventa Pulse")
+                        .foregroundColor(.white.opacity(0.62))
+                        .font(.system(.body, design: .rounded))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .accessibilityHidden(true)
                 }
 
-            Button {} label: { Image(systemName: "mic.fill").font(.system(size: 22, weight: .semibold)) }
-                .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in onMicDown() }.onEnded { _ in onMicUp() })
-                .foregroundStyle(.white)
+                TextField("", text: $text, axis: .vertical)
+                    .lineLimit(1...4) // grows with content
+                    .foregroundColor(.white)
+                    .accentColor(.white)
+                    .submitLabel(.send)
+                    .onSubmit { if !disabledSend { onSend() } }
+                    .textInputAutocapitalization(.sentences)
+                    .disableAutocorrection(false)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                    .font(.system(.body, design: .rounded))
+                    .accessibilityLabel("message field")
+            }
 
+
+
+            // Mic Button (with long press for voice input)
+            Button(action: {}, label: {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+            })
+            .gesture(
+                LongPressGesture(minimumDuration: 0.2)
+                    .onChanged { _ in onMicDown() }
+                    .onEnded { _ in onMicUp() }
+            )
+
+            // Send Button (only one!)
             Button(action: onSend) {
                 Image(systemName: sending ? "hourglass" : "arrow.up.circle.fill")
                     .font(.system(size: 30, weight: .semibold))
@@ -1286,7 +1608,8 @@ private struct InputBar: View {
             .disabled(disabledSend)
             .accessibilityLabel("send")
         }
-        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8) // ✅ Reduced padding
     }
 }
 
@@ -1297,17 +1620,40 @@ private struct HistoryDrawer: View {
     var onDelete: (UUID) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("history").font(.headline).foregroundStyle(.white).padding(.top, 14)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Chat History")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.top, 14)
+
+            // 🔁 Fixed: Styled like all other buttons
+            Button {
+                let newId = UUID()
+                onSelect(newId)   // delegate the creation logic upward
+            } label: {
+                Label("New Chat", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(LinearGradient(colors: [.blue.opacity(0.85), .purple.opacity(0.85)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            Divider().background(.white.opacity(0.15)).padding(.vertical, 4)
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(sessions.sorted(by: { $0.value < $1.value }), id: \.key) { id, title in
                         HStack {
-                            Text(title.isEmpty ? "untitled" : title)
+                            Text(title.isEmpty ? "Untitled" : title)
                                 .foregroundStyle(id == currentId ? .white : .white.opacity(0.85))
                                 .font(.subheadline.weight(id == currentId ? .bold : .regular))
                                 .lineLimit(1)
+
                             Spacer()
+
                             Button(role: .destructive) {
                                 onDelete(id)
                             } label: {
@@ -1316,15 +1662,18 @@ private struct HistoryDrawer: View {
                             .foregroundStyle(.white.opacity(0.7))
                         }
                         .padding(10)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
                         .onTapGesture { onSelect(id) }
                     }
                 }
+                .padding(.bottom, 16)
             }
+
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .background(.thinMaterial)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+        .background(Color.black) // Fully black background
     }
 }
 
@@ -1332,16 +1681,36 @@ private struct HistoryDrawer: View {
 
 private struct PulseAnimatedBackground: View {
     @State private var phase: CGFloat = 0
+    @AppStorage("ui.mood") private var mood: String = "neutral" // "calm", "neutral", "urgent"
+
+    private var base: LinearGradient {
+        switch mood {
+        case "calm":
+            return LinearGradient(colors: [Color.purple.opacity(0.85), Color.blue.opacity(0.9)],
+                                  startPoint: .topLeading, endPoint: .bottomTrailing)
+        case "urgent":
+            return LinearGradient(colors: [Color.purple.opacity(0.92), Color.red.opacity(0.65)],
+                                  startPoint: .topLeading, endPoint: .bottomTrailing)
+        default:
+            return Brand.grad
+        }
+    }
+
     var body: some View {
-        LinearGradient(colors: [Color.purple.opacity(0.92), Color.blue.opacity(0.86)],
-                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        base
             .overlay(
-                AngularGradient(gradient: Gradient(colors: [.white.opacity(0.08), .clear, .white.opacity(0.06), .clear]),
-                                center: .center,
-                                angle: .degrees(Double(phase)))
+                AngularGradient(
+                    gradient: Gradient(colors: [.white.opacity(0.08), .clear,
+                                                .white.opacity(0.06), .clear]),
+                    center: .center,
+                    angle: .degrees(Double(phase))
+                )
             )
             .onAppear {
-                withAnimation(.linear(duration: 18).repeatForever(autoreverses: false)) { phase = 360 }
+                withAnimation(.linear(duration: 18).repeatForever(autoreverses: false)) {
+                    phase = 360
+                }
             }
+            .accessibilityHidden(true)
     }
 }

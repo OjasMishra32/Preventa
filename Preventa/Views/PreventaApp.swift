@@ -1,12 +1,6 @@
-//
-//  PreventaApp.swift
-//  Preventa
-//
-//  Created by Ojasva Mishra on 9/4/25.
-//
-
 import SwiftUI
 import Firebase
+import FirebaseAuth
 
 @main
 struct PreventaApp: App {
@@ -14,9 +8,30 @@ struct PreventaApp: App {
         FirebaseApp.configure()
     }
 
+    @StateObject private var quizManager = QuizManager()
+    @StateObject private var medStore = MedTrackerStore()
+    @State private var isLoggedIn = false
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            NavigationStack {
+                if isLoggedIn {
+                    HomeView()
+                        .environmentObject(quizManager)
+                        .environmentObject(medStore)
+                } else {
+                    ContentView()
+                        .environmentObject(quizManager)
+                        .environmentObject(medStore)
+                }
+            }
+            .onAppear {
+                // ✅ check auth once at app start
+                if let user = Auth.auth().currentUser,
+                   user.isEmailVerified {
+                    isLoggedIn = true
+                }
+            }
         }
     }
 }
