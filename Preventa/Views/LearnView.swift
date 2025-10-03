@@ -1,4 +1,5 @@
 import SwiftUI
+
 // MARK: - Data Models
 struct Question: Identifiable {
     let id = UUID()
@@ -14,7 +15,6 @@ struct Quiz: Identifiable {
     let topic: String
     let questions: [Question]
 }
-// Optional: for multi-level categories
 struct QuizLevel: Identifiable {
     let id = UUID()
     let level: Int
@@ -26,74 +26,68 @@ struct QuizCategory: Identifiable {
     let topic: String
     let levels: [QuizLevel]
 }
+
+
+
 // MARK: - Topic Themes
 struct TopicTheme {
     let colors: [Color]
     let icon: String
 }
-let topicThemes: [String: TopicTheme] = [
-    "Cardiac Arrest": .init(
-        colors: [Color(red: 0.86, green: 0.29, blue: 0.36),
-                 Color(red: 0.50, green: 0.08, blue: 0.44)],
-        icon: "heart.fill"
-    ),
-    "Headaches": .init(
-        colors: [Color(red: 0.98, green: 0.66, blue: 0.20),
-                 Color(red: 0.84, green: 0.32, blue: 0.14)],
-        icon: "brain.head.profile"
-    ),
-    "Nutrition, Diet & Awareness": .init(
-        colors: [Color(red: 0.16, green: 0.70, blue: 0.40),
-                 Color(red: 0.03, green: 0.48, blue: 0.35)],
-        icon: "leaf.fill"
-    ),
-    "Sleep": .init(
-        colors: [Color(red: 0.16, green: 0.24, blue: 0.56),
-                 Color(red: 0.07, green: 0.11, blue: 0.28)],
-        icon: "moon.zzz.fill"
-    ),
-    "Diabetes": .init(
-        colors: [Color(red: 0.20, green: 0.58, blue: 0.95),
-                 Color(red: 0.08, green: 0.26, blue: 0.53)],
-        icon: "drop.fill"
-    ),
-    
-    // keep the rest as they were
-    "Blood Pressure": .init(
-        colors: [Color(red: 0.78, green: 0.16, blue: 0.29),
-                 Color(red: 0.39, green: 0.05, blue: 0.15)],
-        icon: "waveform.path.ecg"
-    ),
-    "Fitness": .init(
-        colors: [Color(red: 0.95, green: 0.35, blue: 0.35),
-                 Color(red: 0.72, green: 0.11, blue: 0.29)],
-        icon: "bolt.heart.fill"
-    ),
-    "Mental Health": .init(
-        colors: [Color(red: 0.45, green: 0.58, blue: 1.0),
-                 Color(red: 0.28, green: 0.35, blue: 0.86)],
-        icon: "face.smiling.inverse"
-    ),
-    "Immune System": .init(
-        colors: [Color(red: 0.28, green: 0.80, blue: 0.80),
-                 Color(red: 0.08, green: 0.53, blue: 0.53)],
-        icon: "shield.checkerboard"
-    ),
-    "First Aid": .init(
-        colors: [Color(red: 0.92, green: 0.20, blue: 0.20),
-                 Color(red: 0.70, green: 0.07, blue: 0.17)],
-        icon: "cross.case.fill"
-    )
-]
+
 // Fallback app theme
 let appGradient = [Color.purple.opacity(0.9), Color.blue.opacity(0.8)]
-// MARK: - Quiz Manager (Persistence, XP/Level, Streak, Time)
 
-// MARK: - Background Particles
+let topicThemes: [String: TopicTheme] = [
+    "First Aid": TopicTheme(
+        colors: [Color.red.opacity(0.9), Color.orange.opacity(0.8)],
+        icon: "cross.case.fill"
+    ),
+    "Immune System": TopicTheme(
+        colors: [Color.teal.opacity(0.9), Color.green.opacity(0.8)],
+        icon: "shield.checkerboard"
+    ),
+    "Mental Health": TopicTheme(
+        colors: [Color.purple.opacity(0.9), Color.pink.opacity(0.85)],
+        icon: "brain.head.profile"
+    ),
+    "Fitness": TopicTheme(
+        colors: [Color.blue.opacity(0.9), Color.green.opacity(0.8)],
+        icon: "figure.strengthtraining.traditional"
+    ),
+    "Cardiac Arrest": TopicTheme(
+        colors: [Color.red.opacity(0.95), Color.pink.opacity(0.85)],
+        icon: "heart.fill"
+    ),
+    "Headaches": TopicTheme(
+        colors: [Color.orange.opacity(0.9), Color.yellow.opacity(0.75)],
+        icon: "bolt.fill"
+    ),
+    "Nutrition": TopicTheme(
+        colors: [Color.green.opacity(0.9), Color.mint.opacity(0.8)],
+        icon: "fork.knife.circle.fill"
+    ),
+    "Sleep": TopicTheme(
+        colors: [Color.indigo.opacity(0.9), Color.blue.opacity(0.8)],
+        icon: "moon.stars.fill"
+    ),
+    "Diabetes": TopicTheme(
+        colors: [Color.cyan.opacity(0.9), Color.blue.opacity(0.8)],
+        icon: "drop.fill"
+    ),
+    "Blood Pressure": TopicTheme(
+        colors: [Color.pink.opacity(0.9), Color.red.opacity(0.85)],
+        icon: "waveform.path.ecg"
+    )
+]
+
+// MARK: - Background Particles (safe)
 struct BackgroundParticles: View {
     let colors: [Color]
     @State private var t: CGFloat = 0
-    
+
+    private var coreColor: Color { colors.first ?? .white }
+
     var body: some View {
         TimelineView(.animation) { context in
             Canvas { ctx, size in
@@ -104,14 +98,14 @@ struct BackgroundParticles: View {
                     let x = sin((time + Double(i)) / speed) * w * 0.3 + w * 0.5
                     let y = cos((time + Double(i)) / speed) * h * 0.25 + h * 0.5
                     let r = CGFloat(30 + (i % 6) * 8)
-                    var path = Path(ellipseIn: CGRect(x: x - Double(r/2),
-                                                      y: y - Double(r/2),
-                                                      width: Double(r), height: Double(r)))
+                    let rect = CGRect(x: x - Double(r/2), y: y - Double(r/2), width: Double(r), height: Double(r))
+                    let path = Path(ellipseIn: rect)
                     ctx.fill(path, with: .radialGradient(
-                        Gradient(colors: [colors.first!.opacity(0.12), .clear]),
+                        Gradient(colors: [coreColor.opacity(0.12), .clear]),
                         center: CGPoint(x: x, y: y),
                         startRadius: 2,
-                        endRadius: r))
+                        endRadius: r
+                    ))
                 }
             }
         }
@@ -119,32 +113,36 @@ struct BackgroundParticles: View {
         .ignoresSafeArea()
     }
 }
+
 // MARK: - Progress Ring
 struct ProgressRing: View {
     var progress: CGFloat
     var thickness: CGFloat = 10
-    
     var body: some View {
         ZStack {
+            Circle().stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: thickness))
             Circle()
-                .stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: thickness))
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(AngularGradient(gradient: Gradient(colors: [.white, .white.opacity(0.6), .white]),
-                                        center: .center),
-                        style: StrokeStyle(lineWidth: thickness, lineCap: .round))
+                .trim(from: 0, to: max(0, min(1, progress)))
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [.white, .white.opacity(0.6), .white]),
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: thickness, lineCap: .round)
+                )
                 .rotationEffect(.degrees(-90))
                 .animation(.easeInOut(duration: 0.6), value: progress)
         }
     }
 }
+
 // MARK: - Glow Button & Stat Card
 struct GlowButton: View {
     let title: String
     var systemImage: String? = nil
     var gradient: [Color] = [Color.blue.opacity(0.8), Color.purple.opacity(0.8)]
     var height: CGFloat = 52
-    
+
     var body: some View {
         HStack(spacing: 10) {
             if let sys = systemImage {
@@ -162,16 +160,17 @@ struct GlowButton: View {
             LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.15), lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: gradient.last!.opacity(0.55), radius: 14, x: 0, y: 8)
+                .shadow(color: (gradient.last ?? .black).opacity(0.55), radius: 14, x: 0, y: 8)
         )
         .contentShape(RoundedRectangle(cornerRadius: 16))
     }
 }
+
 struct GlowStatCard: View {
     let title: String
     let value: String
     var gradient: [Color] = [Color.blue.opacity(0.8), Color.purple.opacity(0.8)]
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Text(value).font(.title3.bold()).foregroundColor(.white)
@@ -183,42 +182,37 @@ struct GlowStatCard: View {
             LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.18), lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: gradient.last!.opacity(0.5), radius: 12, y: 6)
+                .shadow(color: (gradient.last ?? .black).opacity(0.5), radius: 12, y: 6)
         )
         .padding(.horizontal, 2)
     }
 }
-// MARK: - Learning Hub View (unchanged)
-/// ... (rest of LearningHubView, QuizListView, QuizDetailView, ConfettiView) ...
-/// Keep everything exactly the same as in your version above.
-// MARK: - Hook for your own categories/quizzes
-// Define your categories with levels here (like firstAidCategory, cardiacArrestCategory, etc.)
-// let allCategories: [QuizCategory] = [firstAidCategory, cardiacArrestCategory, ...]
+
 // MARK: - Learning Hub
 struct LearningHubView: View {
     @EnvironmentObject var quizManager: QuizManager
-    
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(colors: appGradient, startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
-                BackgroundParticles(colors: appGradient)
-                
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
-                        header
-                        stats
-                        levelStrip
-                        QuizListView(quizzes: allCategories)
-                    }
-                    .padding(.bottom, 42)
+        ZStack {
+            LinearGradient(colors: appGradient, startPoint: .topLeading, endPoint: .bottomTrailing)
+                .ignoresSafeArea()
+            BackgroundParticles(colors: appGradient)
+            
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    header
+                    stats
+                    levelStrip
+                    QuizListView(quizzes: allCategories)
                 }
+                .padding(.bottom, 42)
             }
-            .navigationTitle("Learning Hub")
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationTitle("Learning Hub")
+        .navigationBarTitleDisplayMode(.inline)
     }
-    
+
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Empower Your Health Knowledge")
@@ -230,7 +224,7 @@ struct LearningHubView: View {
         .padding(.horizontal)
         .padding(.top)
     }
-    
+
     private var stats: some View {
         HStack(spacing: 12) {
             GlowStatCard(title: "Courses Completed", value: "\(quizManager.completedQuizzes)")
@@ -239,7 +233,7 @@ struct LearningHubView: View {
         }
         .padding(.horizontal)
     }
-    
+
     private var levelStrip: some View {
         HStack(spacing: 12) {
             ProgressRing(progress: CGFloat(min(1.0, Double(quizManager.xp) / Double(100 + (quizManager.level - 1)*25))))
@@ -260,7 +254,7 @@ struct LearningHubView: View {
         )
         .padding(.horizontal)
     }
-    
+
     private func formattedTime(_ time: TimeInterval) -> String {
         let total = Int(time)
         let hours = total / 3600
@@ -268,9 +262,9 @@ struct LearningHubView: View {
         return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
     }
 }
+
 // MARK: - Quiz List
 struct QuizListView: View {
-    @EnvironmentObject var quizManager: QuizManager
     let quizzes: [QuizCategory]
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -282,14 +276,14 @@ struct QuizListView: View {
                 ForEach(quizzes) { category in
                     let theme = topicThemes[category.topic] ?? TopicTheme(colors: appGradient, icon: "questionmark.circle")
                     NavigationLink {
-                        CategoryDetailView(category: category)   // ⬅️ CHANGED
+                        CategoryDetailView(category: category)
                     } label: {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
                                     .fill(LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
                                     .frame(width: 48, height: 48)
-                                    .shadow(color: theme.colors.last!.opacity(0.6), radius: 10, y: 6)
+                                    .shadow(color: (theme.colors.last ?? .white).opacity(0.6), radius: 10, y: 6)
                                 Image(systemName: theme.icon).foregroundColor(.white)
                             }
                             VStack(alignment: .leading, spacing: 4) {
@@ -314,21 +308,22 @@ struct QuizListView: View {
         }
     }
 }
+
 struct CategoryDetailView: View {
     let category: QuizCategory
-    
+
     var body: some View {
         let theme = topicThemes[category.topic] ?? TopicTheme(colors: appGradient, icon: "questionmark.circle")
-        
+
         ZStack {
             LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
             BackgroundParticles(colors: theme.colors)
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header(theme: theme)
-                    
+
                     ForEach(category.levels.sorted(by: { $0.level < $1.level }), id: \.id) { level in
                         NavigationLink {
                             QuizDetailView(category: category, level: level)
@@ -338,7 +333,6 @@ struct CategoryDetailView: View {
                         .buttonStyle(QuizCardButtonStyle())
                         .padding(.horizontal)
                     }
-                    
                     Spacer(minLength: 20)
                 }
                 .padding(.vertical, 20)
@@ -347,14 +341,14 @@ struct CategoryDetailView: View {
         .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.inline)
     }
-    
+
     private func header(theme: TopicTheme) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 48, height: 48)
-                    .shadow(color: theme.colors.last!.opacity(0.6), radius: 10, y: 6)
+                    .shadow(color: (theme.colors.last ?? .black).opacity(0.6), radius: 10, y: 6)
                 Image(systemName: theme.icon).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -365,14 +359,14 @@ struct CategoryDetailView: View {
         }
         .padding(.horizontal)
     }
-    
+
     private func levelRow(theme: TopicTheme, level: QuizLevel) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 54, height: 54)
-                    .shadow(color: theme.colors.last!.opacity(0.5), radius: 8, y: 4)
+                    .shadow(color: (theme.colors.last ?? .black).opacity(0.5), radius: 8, y: 4)
                 Text("\(level.level)")
                     .font(.headline.bold())
                     .foregroundColor(.white)
@@ -395,6 +389,7 @@ struct CategoryDetailView: View {
         .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 }
+
 struct QuizCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -403,13 +398,14 @@ struct QuizCardButtonStyle: ButtonStyle {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: configuration.isPressed)
     }
 }
-// MARK: - Quiz Detail
+
+// MARK: - Quiz Detail (uses questions from selected level)
 struct QuizDetailView: View {
     @EnvironmentObject var quizManager: QuizManager
     @Environment(\.dismiss) var dismiss
     let category: QuizCategory
     let level: QuizLevel
-    
+
     @State private var current = 0
     @State private var selected: String?
     @State private var reveal = false
@@ -418,26 +414,32 @@ struct QuizDetailView: View {
     @State private var showConfetti = false
     @State private var showHint = false
     @Namespace private var questionNS
-    
+
+    private var questions: [Question] { level.questions }
+    private var hasQuestions: Bool { !questions.isEmpty }
+    private var currentProgress: Double {
+        guard !questions.isEmpty else { return 0 }
+        return Double(current + 1) / Double(questions.count)
+    }
+
     var body: some View {
         let theme = topicThemes[category.topic] ?? TopicTheme(colors: appGradient, icon: "questionmark.circle")
-        
+
         ZStack {
             LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
             BackgroundParticles(colors: theme.colors)
-            
+
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 22) {
                     header(theme: theme)
-                    
-                    if !completed {
+
+                    if !hasQuestions {
+                        emptyState(theme: theme)
+                    } else if !completed {
                         questionCard
                             .matchedGeometryEffect(id: "q-\(current)", in: questionNS)
-                        
                         answersStack(theme: theme)
-                        
                         feedbackAndControls(theme: theme)
-                        
                         progressSection
                     } else {
                         completionView(theme: theme)
@@ -451,8 +453,7 @@ struct QuizDetailView: View {
         .onDisappear { quizManager.endSession() }
         .navigationBarTitleDisplayMode(.inline)
     }
-    
-    // Header with progress ring and topic icon
+
     private func header(theme: TopicTheme) -> some View {
         HStack(spacing: 14) {
             ZStack {
@@ -468,18 +469,38 @@ struct QuizDetailView: View {
         }
         .padding(.horizontal)
     }
-    
-    // Question Card (glassy)
+
+    private func emptyState(theme: TopicTheme) -> some View {
+        VStack(spacing: 12) {
+            Text("No questions found")
+                .font(.title3.bold()).foregroundColor(.white)
+            Text("This level doesn’t have any questions yet.")
+                .foregroundColor(.white.opacity(0.9))
+            Button { dismiss() } label: {
+                GlowButton(title: "Back", systemImage: "arrow.uturn.left.circle.fill", gradient: theme.colors, height: 50)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.18), lineWidth: 1))
+        )
+        .padding(.horizontal)
+    }
+
     private var questionCard: some View {
         VStack(spacing: 8) {
-            Text("Question \(current + 1) of \(level.questions.count)")
+            Text("Question \(current + 1) of \(questions.count)")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.white.opacity(0.8))
-            Text(level.questions[current].text)
-                .font(.title3.bold())
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            if questions.indices.contains(current) {
+                Text(questions[current].text)
+                    .font(.title3.bold())
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
         }
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity)
@@ -493,122 +514,98 @@ struct QuizDetailView: View {
                                 removal: .opacity.combined(with: .move(edge: .leading))))
         .animation(.easeInOut(duration: 0.45), value: current)
     }
-    
-    // Answer Buttons: sleek, no flat red/green fills; use border glow + subtle background tint
+
     private func answersStack(theme: TopicTheme) -> some View {
         VStack(spacing: 12) {
-            ForEach(level.questions[current].options, id: \.self) { opt in
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        if selected == nil { // lock first tap
-                            selected = opt
-                            reveal = true
-                            if opt == level.questions[current].answer {
-                                correctCount += 1
-                                quizManager.recordCorrectAnswer()
+            if questions.indices.contains(current) {
+                ForEach(questions[current].options, id: \.self) { opt in
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            if selected == nil {
+                                selected = opt
+                                reveal = true
+                                if opt == questions[current].answer {
+                                    correctCount += 1
+                                    quizManager.recordCorrectAnswer()
+                                }
                             }
                         }
-                    }
-                } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(borderColor(for: opt), lineWidth: reveal ? 2 : 1)
-                                    .shadow(color: borderColor(for: opt).opacity(reveal ? 0.6 : 0.0), radius: reveal ? 10 : 0, y: 6)
-                            )
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(LinearGradient(colors: glossyTint(for: opt),
-                                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .opacity(reveal ? 0.18 : 0.08)
-                            )
-                        
-                        HStack {
-                            Text(opt)
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if reveal && opt == level.questions[current].answer {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.white)
-                                    .opacity(0.9)
-                                    .transition(.scale.combined(with: .opacity))
-                            } else if reveal && selected == opt && opt != level.questions[current].answer {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.white.opacity(0.9))
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .overlay( // subtle moving shine after reveal
-                        Group {
-                            if reveal && shouldShimmer(opt) {
-                                LinearGradient(colors: [Color.white.opacity(0.35), .clear, Color.white.opacity(0.35)],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                                .blendMode(.screen)
-                                .mask(
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.10))
+                                .overlay(
                                     RoundedRectangle(cornerRadius: 16)
-                                        .stroke(lineWidth: 8)
+                                        .stroke(borderColor(for: opt), lineWidth: reveal ? 2 : 1)
+                                        .shadow(color: borderColor(for: opt).opacity(reveal ? 0.6 : 0.0), radius: reveal ? 10 : 0, y: 6)
                                 )
-                                .offset(x: -200, y: -80)
-                                .animation(.linear(duration: 1.0), value: reveal)
-                                .transition(.opacity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(LinearGradient(colors: glossyTint(for: opt),
+                                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        .opacity(reveal ? 0.18 : 0.08)
+                                )
+
+                            HStack {
+                                Text(opt)
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                if reveal && opt == questions[current].answer {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.white)
+                                        .opacity(0.9)
+                                        .transition(.scale.combined(with: .opacity))
+                                } else if reveal && selected == opt && opt != questions[current].answer {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.white.opacity(0.9))
+                                        .transition(.scale.combined(with: .opacity))
+                                }
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
                         }
-                    )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AnswerButtonStyle(isPressedScale: 0.98))
+                    .padding(.horizontal)
+                    .disabled(reveal)
                 }
-                .buttonStyle(AnswerButtonStyle(isPressedScale: 0.98))
-                .padding(.horizontal)
-                .disabled(reveal) // allow one selection per question
             }
         }
     }
-    
+
     private func borderColor(for option: String) -> Color {
-        guard reveal else { return Color.white.opacity(0.25) }
-        if option == level.questions[current].answer { return .white } // elegant white glow on correct
-        if selected == option { return .white.opacity(0.55) } // soft light on wrong selection
+        guard reveal, questions.indices.contains(current) else { return Color.white.opacity(0.25) }
+        if option == questions[current].answer { return .white }
+        if selected == option { return .white.opacity(0.55) }
         return Color.white.opacity(0.20)
     }
-    
+
     private func glossyTint(for option: String) -> [Color] {
-        guard reveal else { return [Color.white.opacity(0.22), Color.white.opacity(0.05)] }
-        if option == level.questions[current].answer {
+        guard reveal, questions.indices.contains(current) else { return [Color.white.opacity(0.22), Color.white.opacity(0.05)] }
+        if option == questions[current].answer {
             return [Color.white.opacity(0.40), Color.white.opacity(0.10)]
         } else if selected == option {
             return [Color.white.opacity(0.28), Color.white.opacity(0.08)]
         }
         return [Color.white.opacity(0.20), Color.white.opacity(0.06)]
     }
-    
-    private func shouldShimmer(_ option: String) -> Bool {
-        // After reveal, shimmer both the correct and the selected wrong answer
-        if option == level.questions[current].answer { return true }
-        if selected == option && option != level.questions[current].answer { return true }
-        return false
-    }
-    
-    // Feedback + Controls + Hint
+
     private func feedbackAndControls(theme: TopicTheme) -> some View {
         VStack(spacing: 14) {
-            if reveal {
+            if reveal, questions.indices.contains(current) {
                 VStack(spacing: 8) {
-                    let isCorrect = selected == level.questions[current].answer
+                    let isCorrect = selected == questions[current].answer
                     Text(isCorrect ? "Correct" : "Incorrect")
                         .font(.headline.bold())
                         .foregroundColor(.white)
                         .transition(.opacity)
-                    
-                    // Expandable explanation card
+
                     DisclosureGroup(isCorrect ? "Why this is correct" : "What to learn from this") {
-                        Text(level.questions[current].explanation)
+                        Text(questions[current].explanation)
                             .foregroundColor(.white.opacity(0.92))
                             .font(.subheadline)
                             .padding(.top, 6)
@@ -622,15 +619,18 @@ struct QuizDetailView: View {
                     )
                     .padding(.horizontal)
                     .transition(.opacity.combined(with: .move(edge: .top)))
-                    
+
                     Button {
                         withAnimation(.easeInOut(duration: 0.5)) {
                             goNext(theme: theme)
                         }
                     } label: {
-                        GlowButton(title: current < level.questions.count - 1 ? "Next Question" : "Finish Quiz",
-                                   systemImage: "arrow.right.circle.fill",
-                                   gradient: theme.colors, height: 54)
+                        GlowButton(
+                            title: current < max(0, questions.count - 1) ? "Next Question" : "Finish Quiz",
+                            systemImage: "arrow.right.circle.fill",
+                            gradient: theme.colors,
+                            height: 54
+                        )
                     }
                     .padding(.horizontal)
                     .padding(.top, 4)
@@ -638,21 +638,26 @@ struct QuizDetailView: View {
                 .animation(.easeInOut, value: reveal)
             } else {
                 HStack(spacing: 12) {
-                    if let hint = level.questions[current].hint {
+                    if questions.indices.contains(current), let hint = questions[current].hint {
                         Button {
                             withAnimation(.easeInOut(duration: 0.35)) {
                                 showHint.toggle()
                                 if showHint { quizManager.recordHintUsed() }
                             }
                         } label: {
-                            GlowButton(title: showHint ? "Hide Hint" : "Show Hint", systemImage: "lightbulb.fill", gradient: [Color.white.opacity(0.35), Color.white.opacity(0.15)], height: 46)
+                            GlowButton(
+                                title: showHint ? "Hide Hint" : "Show Hint",
+                                systemImage: "lightbulb.fill",
+                                gradient: [Color.white.opacity(0.35), Color.white.opacity(0.15)],
+                                height: 46
+                            )
                         }
                     }
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal)
-                
-                if showHint, let hint = level.questions[current].hint {
+
+                if showHint, questions.indices.contains(current), let hint = questions[current].hint {
                     Text(hint)
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.92))
@@ -668,29 +673,25 @@ struct QuizDetailView: View {
             }
         }
     }
-    
-    // Progress Footer
+
     private var progressSection: some View {
         VStack(spacing: 8) {
-            ProgressView(value: Double(current + 1), total: Double(level.questions.count))
+            ProgressView(value: Double(min(current + 1, max(1, questions.count))), total: Double(max(1, questions.count)))
                 .progressViewStyle(LinearProgressViewStyle(tint: .white))
                 .scaleEffect(x: 1, y: 1.6, anchor: .center)
                 .padding(.horizontal)
                 .animation(.easeInOut(duration: 0.5), value: current)
-            
+
             Text("\(Int(currentProgress * 100))% complete")
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.85))
         }
         .padding(.top, 4)
     }
-    
-    private var currentProgress: Double {
-        Double(current + 1) / Double(level.questions.count)
-    }
-    
+
     private func goNext(theme: TopicTheme) {
-        if current < level.questions.count - 1 {
+        guard !questions.isEmpty else { return }
+        if current < questions.count - 1 {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 current += 1
                 selected = nil
@@ -707,67 +708,73 @@ struct QuizDetailView: View {
             }
         }
     }
-    
-    // Completion Screen
+
+    // Final results card after finishing a level
     private func completionView(theme: TopicTheme) -> some View {
-        VStack(spacing: 20) {
-            if showConfetti {
-                ConfettiView()
-                    .frame(height: 160)
-                    .transition(.scale.combined(with: .opacity))
-            }
-            
+        VStack(spacing: 18) {
             ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 140, height: 140)
-                    .shadow(color: .black.opacity(0.25), radius: 14, y: 8)
-                Text("\(Int((Double(correctCount) / Double(level.questions.count)) * 100))%")
-                    .font(.largeTitle.bold()).foregroundColor(.white)
-            }
-            .padding(.top, 4)
-            
-            Text("Quiz Completed")
-                .font(.title.bold()).foregroundColor(.white)
-            Text("You answered \(correctCount) of \(level.questions.count) correctly")
-                .foregroundColor(.white.opacity(0.9))
-            
-            // Review misses
-            let missed = level.questions.enumerated().filter { idx, q in
-                // Derive misses by checking if explanations exist for those not counted
-                // (In a full implementation, track per-question correctness. Simplified here.)
-                return false
-            }
-            if !missed.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Review")
-                        .font(.headline).foregroundColor(.white)
-                    ForEach(missed, id: \.0) { _, q in
-                        Text("• \(q.text)").foregroundColor(.white.opacity(0.9)).font(.subheadline)
-                    }
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                VStack(spacing: 10) {
+                    Text("Level Complete!")
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                    Text("You answered \(correctCount) out of \(questions.count) correctly.")
+                        .foregroundColor(.white.opacity(0.92))
+                        .multilineTextAlignment(.center)
+                    ProgressRing(progress: CGFloat(Double(correctCount) / max(1, Double(questions.count))))
+                        .frame(width: 72, height: 72)
+                        .padding(.top, 6)
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial)
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.18), lineWidth: 1))
-                )
-                .padding(.horizontal)
-            }
-            
-            Button {
-                dismiss()
-            } label: {
-                GlowButton(title: "Back to Learning Hub", systemImage: "arrow.uturn.left.circle.fill", gradient: theme.colors, height: 54)
+                .padding(20)
             }
             .padding(.horizontal)
-            .padding(.top, 6)
+
+            if showConfetti {
+                ConfettiView()
+                    .frame(height: 120)
+                    .transition(.opacity)
+            }
+
+            VStack(spacing: 12) {
+                Button {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                        current = 0
+                        selected = nil
+                        reveal = false
+                        completed = false
+                        showHint = false
+                        correctCount = 0
+                        showConfetti = false
+                    }
+                } label: {
+                    GlowButton(
+                        title: "Retake Level",
+                        systemImage: "arrow.counterclockwise.circle.fill",
+                        gradient: theme.colors,
+                        height: 54
+                    )
+                }
+
+                Button { dismiss() } label: {
+                    GlowButton(
+                        title: "Back to Levels",
+                        systemImage: "list.bullet.circle.fill",
+                        gradient: [Color.white.opacity(0.35), Color.white.opacity(0.18)],
+                        height: 50
+                    )
+                }
+            }
+            .padding(.horizontal)
         }
-        .padding(.bottom, 20)
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 }
-// Answer button subtle press style
+
+// MARK: - Answer button press style
 struct AnswerButtonStyle: ButtonStyle {
     let isPressedScale: CGFloat
     func makeBody(configuration: Configuration) -> some View {
@@ -776,18 +783,18 @@ struct AnswerButtonStyle: ButtonStyle {
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: configuration.isPressed)
     }
 }
+
 // MARK: - Confetti
 struct ConfettiView: View {
     @State private var anim: Bool = false
     private let colors: [Color] = [.white.opacity(0.9), .yellow, .orange, .pink, .mint, .cyan]
-    
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 ForEach(0..<36, id: \.self) { i in
                     let size = CGFloat(Int.random(in: 6...12))
                     Circle()
-                        .fill(colors.randomElement()!)
+                        .fill(colors.randomElement() ?? .white)
                         .frame(width: size, height: size)
                         .position(x: CGFloat.random(in: 0...geo.size.width),
                                   y: anim ? geo.size.height + 30 : -30)
@@ -800,6 +807,7 @@ struct ConfettiView: View {
         .allowsHitTesting(false)
     }
 }
+
 let firstAidCategory = QuizCategory(
     title: "First Aid",
     topic: "First Aid",

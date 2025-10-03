@@ -11,6 +11,9 @@ struct HomeView: View {
     @State private var path = NavigationPath()
     @Environment(\.dismiss) private var dismiss
 
+    // ✅ Make sure Learn gets its dependencies
+
+
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
@@ -123,7 +126,9 @@ struct HomeView: View {
                 case .medsToday:
                     MedTrackerView()
                 case .learn:
+                    // Create a local manager so we never crash if nothing was injected above.
                     LearningHubView()
+                        .environmentObject(QuizManager())
                 case .visualChecks:
                     StubScreen(title: "Visuals")
                 case .checkIns:
