@@ -456,7 +456,7 @@ final class PulseChatVM: ObservableObject {
     @Published var currentInput: String = ""
     @Published var sending: Bool = false
     
-
+    @Published var unlockedLevel: Int = UserDefaults.standard.integer(forKey: "unlockedLevel") == 0 ? 1 : UserDefaults.standard.integer(forKey: "unlockedLevel")
     // attachments / tray
     @Published var showTray: Bool = false
     @Published var pickFromLibrary: Bool = false

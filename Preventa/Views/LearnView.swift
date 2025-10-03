@@ -264,40 +264,72 @@ struct LearningHubView: View {
 }
 
 // MARK: - Quiz List
+import SwiftUI
+
+import SwiftUI
+
 struct QuizListView: View {
     let quizzes: [QuizCategory]
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Available Quizzes")
                 .font(.title2.bold())
                 .foregroundColor(.white)
                 .padding(.horizontal)
+            
             LazyVStack(spacing: 14) {
                 ForEach(quizzes) { category in
-                    let theme = topicThemes[category.topic] ?? TopicTheme(colors: appGradient, icon: "questionmark.circle")
+                    let theme = topicThemes[category.topic] ??
+                        TopicTheme(colors: appGradient, icon: "questionmark.circle")
+                    
                     NavigationLink {
                         CategoryDetailView(category: category)
                     } label: {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .fill(
+                                        LinearGradient(
+                                            colors: theme.colors,
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
                                     .frame(width: 48, height: 48)
-                                    .shadow(color: (theme.colors.last ?? .white).opacity(0.6), radius: 10, y: 6)
-                                Image(systemName: theme.icon).foregroundColor(.white)
+                                    .shadow(
+                                        color: (theme.colors.last ?? .white).opacity(0.6),
+                                        radius: 10,
+                                        y: 6
+                                    )
+                                
+                                Image(systemName: theme.icon)
+                                    .foregroundColor(.white)
                             }
+                            
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(category.title).font(.headline).foregroundColor(.white)
-                                Text(category.topic).font(.caption).foregroundColor(.white.opacity(0.8))
+                                Text(category.title)
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                
+                                Text(category.topic)
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.8))
                             }
+                            
                             Spacer()
-                            Image(systemName: "chevron.right").foregroundColor(.white.opacity(0.9))
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.white.opacity(0.9))
                         }
                         .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 18)
                                 .fill(.ultraThinMaterial)
-                                .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.18), lineWidth: 1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                                )
                         )
                         .contentShape(RoundedRectangle(cornerRadius: 18))
                     }
@@ -309,56 +341,33 @@ struct QuizListView: View {
     }
 }
 
-struct CategoryDetailView: View {
-    let category: QuizCategory
-
-    var body: some View {
-        let theme = topicThemes[category.topic] ?? TopicTheme(colors: appGradient, icon: "questionmark.circle")
-
-        ZStack {
-            LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
-            BackgroundParticles(colors: theme.colors)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header(theme: theme)
-
-                    ForEach(category.levels.sorted(by: { $0.level < $1.level }), id: \.id) { level in
-                        NavigationLink {
-                            QuizDetailView(category: category, level: level)
-                        } label: {
-                            levelRow(theme: theme, level: level)
-                        }
-                        .buttonStyle(QuizCardButtonStyle())
-                        .padding(.horizontal)
-                    }
-                    Spacer(minLength: 20)
-                }
-                .padding(.vertical, 20)
-            }
-        }
-        .navigationTitle(category.title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func header(theme: TopicTheme) -> some View {
+    // MARK: - Row View
+    @ViewBuilder
+    private func quizRow(category: QuizCategory, theme: TopicTheme) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(LinearGradient(colors: theme.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 48, height: 48)
-                    .shadow(color: (theme.colors.last ?? .black).opacity(0.6), radius: 10, y: 6)
+                    .shadow(color: (theme.colors.last ?? .white).opacity(0.6), radius: 10, y: 6)
                 Image(systemName: theme.icon).foregroundColor(.white)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.title).font(.title2.bold()).foregroundColor(.white)
-                Text(category.topic).font(.caption).foregroundColor(.white.opacity(0.9))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(category.title).font(.headline).foregroundColor(.white)
+                Text(category.topic).font(.caption).foregroundColor(.white.opacity(0.8))
             }
             Spacer()
+            Image(systemName: "chevron.right").foregroundColor(.white.opacity(0.9))
         }
-        .padding(.horizontal)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.18), lineWidth: 1))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 18))
     }
+
 
     private func levelRow(theme: TopicTheme, level: QuizLevel) -> some View {
         HStack(spacing: 12) {
@@ -388,7 +397,6 @@ struct CategoryDetailView: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 18))
     }
-}
 
 struct QuizCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

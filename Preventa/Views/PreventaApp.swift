@@ -4,32 +4,33 @@ import FirebaseAuth
 
 @main
 struct PreventaApp: App {
-    init() {
-        FirebaseApp.configure()
-    }
-
     @StateObject private var quizManager = QuizManager()
     @StateObject private var medStore = MedTrackerStore()
     @State private var isLoggedIn = false
+
+    init() {
+        FirebaseApp.configure()
+    }
 
     var body: some Scene {
         WindowGroup {
             NavigationStack {
                 if isLoggedIn {
                     HomeView()
-                        .environmentObject(quizManager)
-                        .environmentObject(medStore)
                 } else {
-                    ContentView()
-                        .environmentObject(quizManager)
-                        .environmentObject(medStore)
+                    ContentView() // login page
                 }
             }
+            .environmentObject(quizManager)
+            .environmentObject(medStore)
             .onAppear {
-                // ✅ check auth once at app start
-                if let user = Auth.auth().currentUser,
-                   user.isEmailVerified {
-                    isLoggedIn = true
+                // 🔑 Keep listening to login/logout state changes
+                Auth.auth().addStateDidChangeListener { _, user in
+                    if let user = user, user.isEmailVerified {
+                        isLoggedIn = true
+                    } else {
+                        isLoggedIn = false
+                    }
                 }
             }
         }

@@ -9,6 +9,10 @@ final class QuizManager: ObservableObject {
     @Published var xp: Int = UserDefaults.standard.integer(forKey: "xp")
     @Published var level: Int = UserDefaults.standard.integer(forKey: "level") == 0 ? 1 : UserDefaults.standard.integer(forKey: "level")
     
+    // ✅ New: Track unlocked levels per category (keyed by category ID or title)
+    @Published var unlockedLevels: [String: Int] =
+        (UserDefaults.standard.dictionary(forKey: "unlockedLevels") as? [String: Int]) ?? [:]
+    
     private var sessionStart: Date?
     private var timer: Timer?
     
@@ -16,6 +20,7 @@ final class QuizManager: ObservableObject {
     private let xpPerQuizCompletion = 25
     private let xpCostHint = 5
     
+    // MARK: - Session Tracking
     func startSession() {
         sessionStart = Date()
         startTimer()
@@ -30,6 +35,7 @@ final class QuizManager: ObservableObject {
         sessionStart = nil
     }
     
+    // MARK: - Quiz Progress / XP
     func recordCorrectAnswer() { addXP(xpPerCorrect) }
     func recordHintUsed() { addXP(-xpCostHint) }
     
@@ -71,6 +77,7 @@ final class QuizManager: ObservableObject {
         UserDefaults.standard.set(today, forKey: "lastPlayed")
     }
     
+    // MARK: - Timer
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -86,5 +93,17 @@ final class QuizManager: ObservableObject {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+    
+    // MARK: - 🔒 Level Unlocking
+    func highestUnlockedLevel(for categoryKey: String) -> Int {
+        max(1, unlockedLevels[categoryKey] ?? 1)
+    }
+    
+    func unlockNextLevel(in categoryKey: String, currentLevel: Int) {
+        let current = highestUnlockedLevel(for: categoryKey)
+        guard currentLevel >= current, currentLevel < 5 else { return }
+        unlockedLevels[categoryKey] = currentLevel + 1
+        UserDefaults.standard.set(unlockedLevels, forKey: "unlockedLevels")
     }
 }

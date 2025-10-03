@@ -132,7 +132,7 @@ struct HomeView: View {
                 case .visualChecks:
                     StubScreen(title: "Visuals")
                 case .checkIns:
-                    StubScreen(title: "Check-ins")
+                    CheckInsView()
                 case .actionPlans:
                     StubScreen(title: "Actions")
                 case .resources:
@@ -200,7 +200,7 @@ final class HomeVM: ObservableObject {
 
 // MARK: - Components
 
-private struct AnimatedBrandBackground: View {
+private struct AnimatedBrandBackground1: View {
     @State private var phase: CGFloat = 0
     var body: some View {
         LinearGradient(
@@ -481,7 +481,7 @@ private struct FeatureTile: View {
 
 // MARK: - Shared UI bits
 
-private struct GlassCard<Content: View>: View {
+private struct GlassCard1<Content: View>: View {
     let expand: Bool
     let content: Content
     init(expand: Bool = true, @ViewBuilder content: () -> Content) {
