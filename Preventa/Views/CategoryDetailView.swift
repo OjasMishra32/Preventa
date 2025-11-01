@@ -38,16 +38,9 @@ struct CategoryDetailView: View {
                             .buttonStyle(QuizCardButtonStyle())
                             .padding(.horizontal)
                         } else {
-                            // 🔒 Locked card
+                            // 🔒 Locked card (lock is already shown in levelRow, no need for overlay)
                             levelRow(theme: theme, level: quizLevel, locked: true)
-                                .overlay(
-                                    Image(systemName: "lock.fill")
-                                        .font(.title2)
-                                        .foregroundColor(.gray)
-                                        .padding(.trailing, 20),
-                                    alignment: .trailing
-                                )
-                                .opacity(0.6)
+                                .opacity(0.65)
                                 .padding(.horizontal)
                         }
                     }
@@ -61,73 +54,178 @@ struct CategoryDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
     
-    // MARK: - Header
+    // MARK: - Modern Header
     private func header(theme: TopicTheme) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(colors: theme.colors,
-                                         startPoint: .topLeading,
-                                         endPoint: .bottomTrailing))
-                    .frame(width: 48, height: 48)
-                    .shadow(color: (theme.colors.last ?? .black).opacity(0.6),
-                            radius: 10, y: 6)
-                Image(systemName: theme.icon)
-                    .foregroundColor(.white)
+        GlassCard {
+            HStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    theme.colors[0].opacity(0.5),
+                                    theme.colors[1].opacity(0.3),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 15,
+                                endRadius: 50
+                            )
+                        )
+                        .frame(width: 100, height: 100)
+                        .blur(radius: 15)
+                    
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: theme.colors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 64, height: 64)
+                        .shadow(color: (theme.colors.last ?? .black).opacity(0.6), radius: 12, y: 6)
+                    
+                    Image(systemName: theme.icon)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(category.title)
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    
+                    Text(category.topic)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.85))
+                    
+                    HStack(spacing: 12) {
+                        Label("\(category.levels.count) Levels", systemImage: "list.number")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                }
+                
+                Spacer()
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.title)
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
-                Text(category.topic)
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.9))
-            }
-            Spacer()
+            .padding(20)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 22)
     }
     
-    // MARK: - Level Row
+    // MARK: - Modern Level Row
     private func levelRow(theme: TopicTheme, level: QuizLevel, locked: Bool) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(LinearGradient(colors: theme.colors,
-                                         startPoint: .topLeading,
-                                         endPoint: .bottomTrailing))
-                    .frame(width: 54, height: 54)
-                    .shadow(color: (theme.colors.last ?? .black).opacity(0.5),
-                            radius: 8, y: 4)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        locked
+                            ? LinearGradient(
+                                colors: [
+                                    Color.gray.opacity(0.4),
+                                    Color.gray.opacity(0.3)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            : LinearGradient(
+                                colors: theme.colors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                    )
+                    .frame(width: 60, height: 60)
+                    .shadow(
+                        color: locked
+                            ? Color.black.opacity(0.2)
+                            : (theme.colors.last ?? .black).opacity(0.5),
+                        radius: locked ? 6 : 10,
+                        y: locked ? 3 : 6
+                    )
                 
-                Text("\(level.level)")
-                    .font(.headline.bold())
-                    .foregroundColor(.white)
+                if locked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                } else {
+                    Text("\(level.level)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
             }
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Level \(level.level)")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text(locked ? "Locked" : "\(level.questions.count) questions")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.85))
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                
+                HStack(spacing: 8) {
+                    if locked {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lock.fill")
+                                .font(.caption2)
+                            Text("Locked")
+                                .font(.caption.weight(.medium))
+                        }
+                        .foregroundStyle(.white.opacity(0.7))
+                    } else {
+                        Label("\(level.questions.count) questions", systemImage: "questionmark.circle")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
             }
             
             Spacer()
             
-            Image(systemName: locked ? "lock.fill" : "chevron.right")
-                .foregroundColor(.white.opacity(0.9))
+            if !locked {
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
         }
-        .padding(14)
+        .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(locked ? 0.08 : 0.15),
+                                    Color.white.opacity(locked ? 0.04 : 0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(locked ? 0.12 : 0.25),
+                                    Color.white.opacity(locked ? 0.06 : 0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
                 )
         )
-        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(
+            color: locked ? Color.black.opacity(0.1) : Color.black.opacity(0.15),
+            radius: locked ? 6 : 10,
+            y: locked ? 3 : 5
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 22))
     }
 }

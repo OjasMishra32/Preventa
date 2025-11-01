@@ -128,6 +128,7 @@
 			buildPhases = (
 				26920A582E6A7EB10009F6A8 /* Sources */,
 				26920A592E6A7EB10009F6A8 /* Frameworks */,
+				7F7F7F7F2E80000000ABCD01 /* Inject Secrets from .env */,
 				26920A5A2E6A7EB10009F6A8 /* Resources */,
 			);
 			buildRules = (
@@ -266,6 +267,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		7F7F7F7F2E80000000ABCD01 /* Inject Secrets from .env */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Inject Secrets from .env";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "#!/bin/bash\nset -u  # no -e; never fail the build\n\nENV_FILE=\"$PROJECT_DIR/.env\"\nif [ -f \"$ENV_FILE\" ]; then\n  set -a\n  . \"$ENV_FILE\" || true\n  set +a\n  if [ -n \"${OPENAI_API_KEY:-}\" ]; then\n    PLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n    /usr/libexec/PlistBuddy -c \"Set :OPENAI_API_KEY $OPENAI_API_KEY\" \"$PLIST\" 2>/dev/null \\\n      || /usr/libexec/PlistBuddy -c \"Add :OPENAI_API_KEY string $OPENAI_API_KEY\" \"$PLIST\" || true\n  fi\nfi\n\nexit 0\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		26920A582E6A7EB10009F6A8 /* Sources */ = {
@@ -431,6 +454,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Preventa/Preventa.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = X452LG6K72;
@@ -439,6 +463,8 @@
 				INFOPLIST_FILE = Preventa/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Allow camera access to capture photos that help analyze symptoms and support preventive guidance.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Preventa needs access to your health data to provide personalized insights and recommendations through Preventa Pulse.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Preventa may update your health data to track progress and sync with your Apple Watch.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Allow microphone access to record your voice when you use voice input. ";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Allow photo library access so you can choose images to discuss with Preventa Pulse.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Allow speech recognition so your voice notes can be converted to text.";
@@ -465,6 +491,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Preventa/Preventa.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = X452LG6K72;
@@ -473,6 +500,8 @@
 				INFOPLIST_FILE = Preventa/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Allow camera access to capture photos that help analyze symptoms and support preventive guidance.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Preventa needs access to your health data to provide personalized insights and recommendations through Preventa Pulse.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Preventa may update your health data to track progress and sync with your Apple Watch.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Allow microphone access to record your voice when you use voice input. ";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Allow photo library access so you can choose images to discuss with Preventa Pulse.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Allow speech recognition so your voice notes can be converted to text.";

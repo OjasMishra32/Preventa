@@ -1,5 +1,7 @@
 import SwiftUI
 import UserNotifications
+import FirebaseFirestore
+import FirebaseAuth
 // MARK: - Models
 enum IntakeStatus: String, Codable, CaseIterable {
     case pending
@@ -149,6 +151,32 @@ final class MedTrackerStore: ObservableObject {
         }
         logs[key] = arr
         checkCompletionForToday()
+        
+        // Save to Firestore for progress tracking
+        if status == .taken {
+            saveMedicationLog(dose: dose)
+            
+            // Generate AI medication advice
+            // Removed AI medication advice call to save API usage
+        }
+        
+        // Update progress
+        Task {
+            await ProgressCalculator.shared.calculateTodayProgress()
+        }
+    }
+    
+    private func saveMedicationLog(dose: ScheduledDose) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        
+        let log: [String: Any] = [
+            "medicationName": dose.med.name,
+            "timestamp": Timestamp(date: Date())
+        ]
+        
+        db.collection("users").document(uid).collection("medicationLogs")
+            .addDocument(data: log)
     }
     func snooze(_ dose: ScheduledDose, minutes: Int = 10) {
         Task { await scheduleOneOffSnooze(dose, minutes: minutes) }
@@ -334,50 +362,89 @@ struct MedTrackerView: View {
     let theme = appGradient
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(colors: theme, startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .ignoresSafeArea()
-                BackgroundParticles(colors: theme)
+        ZStack {
+            LinearGradient(colors: theme, startPoint: .topLeading, endPoint: .bottomTrailing)
+                .ignoresSafeArea()
+            BackgroundParticles(colors: theme)
 
-                VStack(spacing: 14) {
-                    header
-                    tabSwitcher
+            VStack(spacing: 14) {
+                header
+                tabSwitcher
 
-                    switch store.selectedTab {
-                    case .today:
-                        TodayList(store: store, theme: theme)
-                    case .schedule:
-                        ScheduleBoard(store: store, theme: theme)
-                    case .insights:
-                        InsightsBoard(store: store, theme: theme)
-                    }
-                }
-
-                if store.showConfetti {
-                    ConfettiBurstView()
-                        .transition(.opacity)
-                        .allowsHitTesting(false)
+                switch store.selectedTab {
+                case .today:
+                    TodayList(store: store, theme: theme)
+                case .schedule:
+                    ScheduleBoard(store: store, theme: theme)
+                case .insights:
+                    InsightsBoard(store: store, theme: theme)
                 }
             }
-            .navigationTitle("Medication Tracker")
-            .navigationBarTitleDisplayMode(.inline)
+
+            if store.showConfetti {
+                ConfettiBurstView()
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
         }
+        .navigationTitle("Medication Tracker")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                ProgressRing(progress: CGFloat(store.dailyCompletionFraction()), thickness: 10)
-                    .frame(width: 56, height: 56)
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // Enhanced Progress Ring
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 8)
+                        .frame(width: 80, height: 80)
+                    
+                    ProgressRing(progress: CGFloat(store.dailyCompletionFraction()), thickness: 8)
+                        .frame(width: 80, height: 80)
+                    
+                    VStack(spacing: 2) {
+                        Text("\(Int(store.dailyCompletionFraction() * 100))%")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("Today")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+                .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Today")
-                        .font(.title2.bold())
-                        .foregroundColor(.white)
-                    Text("Streak \(store.streak())")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.9))
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "flame.fill")
+                            .font(.title3)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.orange, .red],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        Text("\(store.streak())")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text("day streak")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                    
+                    if store.medications.isEmpty {
+                        Text("Add your first medication to get started")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    } else {
+                        HStack(spacing: 12) {
+                            StatBadge(icon: "pills.fill", value: "\(store.medications.count)", label: "Meds")
+                            StatBadge(icon: "clock.fill", value: "\(store.dosesForToday().count)", label: "Doses")
+                        }
+                    }
                 }
 
                 Spacer()
@@ -385,18 +452,63 @@ struct MedTrackerView: View {
                 NavigationLink {
                     AddMedicationView(store: store, theme: theme)
                 } label: {
-                    GlowButton(title: "Add",
-                               systemImage: "plus.circle.fill",
-                               gradient: theme,
-                               height: 44)
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                        Text("Add")
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            colors: theme,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: Capsule()
+                    )
+                    .shadow(color: theme.last?.opacity(0.4) ?? .black.opacity(0.3), radius: 8, y: 4)
                 }
-                .frame(width: 120)
             }
 
             WeekStrip(store: store)
         }
         .padding(.horizontal)
         .padding(.top, 14)
+    }
+    
+    private struct StatBadge: View {
+        let icon: String
+        let value: String
+        let label: String
+        
+        var body: some View {
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: icon)
+                        .font(.caption2)
+                    Text(value)
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundColor(.white.opacity(0.9))
+                
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.12))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
     }
 
     private var tabSwitcher: some View {
@@ -470,56 +582,143 @@ struct DoseRow: View {
     let dose: ScheduledDose
     let theme: [Color]
     @State private var animateCheck: Bool = false
+    @State private var isPressed = false
+    
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
+            // Enhanced pill icon
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(LinearGradient(colors: theme, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 54, height: 54)
-                    .shadow(color: theme.last?.opacity(0.5) ?? .black.opacity(0.3), radius: 8, y: 4)
-                Image(systemName: iconName)
-                    .foregroundStyle(.white)
+                // Gradient background
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: dose.status == .taken 
+                                ? [Color.green.opacity(0.8), Color.mint.opacity(0.8)]
+                                : theme,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 64, height: 64)
+                    .shadow(
+                        color: dose.status == .taken 
+                            ? Color.green.opacity(0.4)
+                            : (theme.last?.opacity(0.5) ?? .black.opacity(0.3)),
+                        radius: dose.status == .taken ? 12 : 8,
+                        y: 4
+                    )
+                
+                // Icon or checkmark
+                if dose.status == .taken {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.bounce, value: animateCheck)
+                } else {
+                    Image(systemName: iconName)
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(.white)
+                }
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(dose.med.name)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text("\(dose.med.dose) • \(dose.time.label)")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.85))
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(dose.med.name)
+                        .font(.headline.weight(.semibold))
+                        .foregroundColor(.white)
+                    
+                    if dose.med.isCritical {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                    }
+                }
+                
+                HStack(spacing: 12) {
+                    Label(dose.med.dose, systemImage: "pills")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.85))
+                    
+                    Label(dose.time.label, systemImage: "clock")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.85))
+                }
             }
+            
             Spacer()
-            if dose.status == .taken {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .symbolEffect(.bounce, value: animateCheck)
-                    .foregroundStyle(.white)
+            
+            // Status indicator
+            VStack(spacing: 4) {
+                statusIcon
+                if dose.status == .taken {
+                    Text("Taken")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.7))
+                }
             }
         }
-        .padding(14)
+        .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.15),
+                            Color.white.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(dose.status == .pending ? 0.25 : 0.15),
+                                    Color.white.opacity(dose.status == .pending ? 0.15 : 0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         )
-        .opacity(dose.status == .pending ? 1.0 : 0.9)
-        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .opacity(dose.status == .pending ? 1.0 : 0.85)
+        .contentShape(RoundedRectangle(cornerRadius: 22))
+        .onTapGesture {
+            if dose.status != .taken {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    store.mark(dose, as: .taken)
+                    animateCheck.toggle()
+                    Hx.ok()
+                }
+            }
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     store.mark(dose, as: .taken)
                     animateCheck.toggle()
+                    Hx.ok()
                 }
             } label: {
                 Label("Taken", systemImage: "checkmark.circle.fill")
             }
             .tint(.green)
+            
             Button {
                 withAnimation(.easeInOut) {
                     store.mark(dose, as: .skipped)
+                    Hx.warn()
                 }
             } label: {
                 Label("Skip", systemImage: "xmark.circle.fill")
@@ -530,15 +729,39 @@ struct DoseRow: View {
             Button {
                 withAnimation(.easeInOut) {
                     store.snooze(dose)
+                    Hx.tap()
                 }
             } label: {
-                Label("Snooze", systemImage: "bell.and.waveform")
+                Label("Snooze 10m", systemImage: "bell.and.waveform")
             }
             .tint(.orange)
         }
     }
+    
     private var iconName: String {
         dose.med.isCritical ? "cross.circle.fill" : "pills.fill"
+    }
+    
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch dose.status {
+        case .taken:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.green)
+        case .skipped:
+            Image(systemName: "xmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.red)
+        case .late:
+            Image(systemName: "clock.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+        case .pending:
+            Circle()
+                .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                .frame(width: 24, height: 24)
+        }
     }
 }
 struct EmptyState: View {
@@ -568,27 +791,72 @@ struct WeekStrip: View {
     var body: some View {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             ForEach(0..<7, id: \.self) { i in
                 let date = calendar.date(byAdding: .day, value: -((6 - i)), to: today) ?? today
                 let fraction = store.dailyCompletionFraction(date: date)
-                VStack(spacing: 6) {
+                let isToday = calendar.isDate(date, inSameDayAs: today)
+                
+                VStack(spacing: 8) {
                     ZStack {
+                        // Background ring
                         Circle()
-                            .stroke(.white.opacity(0.25), lineWidth: 6)
-                            .frame(width: 32, height: 32)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.2),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 4
+                            )
+                            .frame(width: 40, height: 40)
+                        
+                        // Progress ring
                         Circle()
                             .trim(from: 0, to: fraction)
                             .stroke(
-                                .white,
-                                style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                                LinearGradient(
+                                    colors: isToday
+                                        ? [.blue, .purple]
+                                        : [.white, .white.opacity(0.7)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(lineWidth: 4, lineCap: .round)
                             )
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 32, height: 32)
+                            .frame(width: 40, height: 40)
+                        
+                        // Completion indicator
+                        if fraction >= 1.0 {
+                            Image(systemName: "checkmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.green)
+                        } else if fraction > 0 {
+                            Text("\(Int(fraction * 100))%")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
                     }
-                    Text(shortWeekday(date))
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.9))
+                    .shadow(
+                        color: isToday ? .blue.opacity(0.3) : .clear,
+                        radius: isToday ? 8 : 0
+                    )
+                    
+                    VStack(spacing: 2) {
+                        Text(shortWeekday(date))
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(isToday ? .white : .white.opacity(0.8))
+                        
+                        Text("\(calendar.component(.day, from: date))")
+                            .font(.caption2)
+                            .foregroundColor(isToday ? .white.opacity(0.9) : .white.opacity(0.6))
+                    }
+                }
+                .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -598,7 +866,7 @@ struct WeekStrip: View {
         formatter.dateFormat = "E"
         return formatter.string(from: date)
     }
-}
+
 struct ScheduleBoard: View {
     @ObservedObject var store: MedTrackerStore
     let theme: [Color]

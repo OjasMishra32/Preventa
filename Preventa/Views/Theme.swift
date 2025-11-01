@@ -24,3 +24,6 @@ enum Hx {
     static func ok() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     static func warn() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
 }
+
+// Shared gradient for app views
+let appGradient = [Color.purple.opacity(0.9), Color.blue.opacity(0.8)]

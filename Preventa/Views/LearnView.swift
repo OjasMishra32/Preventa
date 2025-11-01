@@ -35,8 +35,7 @@ struct TopicTheme {
     let icon: String
 }
 
-// Fallback app theme
-let appGradient = [Color.purple.opacity(0.9), Color.blue.opacity(0.8)]
+// appGradient is now defined in Theme.swift
 
 let topicThemes: [String: TopicTheme] = [
     "First Aid": TopicTheme(
@@ -188,71 +187,194 @@ struct GlowStatCard: View {
     }
 }
 
-// MARK: - Learning Hub
+// MARK: - Learning Hub (Modernized)
 struct LearningHubView: View {
     @EnvironmentObject var quizManager: QuizManager
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: appGradient, startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
-            BackgroundParticles(colors: appGradient)
+            AnimatedBrandBackground().ignoresSafeArea()
             
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
-                    stats
-                    levelStrip
-                    QuizListView(quizzes: allCategories)
+                VStack(alignment: .leading, spacing: 20) {
+                    // Modern Header - Compact
+                    modernHeader
+                    
+                    // Enhanced Stats Section - Compact
+                    modernStatsSection
+                    
+                    // Enhanced Level Progress - Compact
+                    modernLevelProgress
+                    
+                    // Modern Quiz List
+                    ModernQuizListView(quizzes: allCategories)
                 }
+                .padding(.horizontal, 22)
+                .padding(.top, 12)
                 .padding(.bottom, 42)
             }
         }
-        .navigationTitle("Learning Hub")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Learn")
+        .navigationBarTitleDisplayMode(.large)
     }
 
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Empower Your Health Knowledge")
-                .font(.largeTitle.bold()).foregroundColor(.white)
-                .minimumScaleFactor(0.7)
-            Text("Interactive health quizzes designed for your growth. Keep your streak alive and track your progress.")
-                .foregroundColor(.white.opacity(0.9))
-        }
-        .padding(.horizontal)
-        .padding(.top)
-    }
-
-    private var stats: some View {
-        HStack(spacing: 12) {
-            GlowStatCard(title: "Courses Completed", value: "\(quizManager.completedQuizzes)")
-            GlowStatCard(title: "Learning Time", value: formattedTime(quizManager.learningTime))
-            GlowStatCard(title: "Streak", value: "\(quizManager.streak)")
-        }
-        .padding(.horizontal)
-    }
-
-    private var levelStrip: some View {
-        HStack(spacing: 12) {
-            ProgressRing(progress: CGFloat(min(1.0, Double(quizManager.xp) / Double(100 + (quizManager.level - 1)*25))))
-                .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Level \(quizManager.level)")
-                    .font(.headline).foregroundColor(.white)
-                Text("XP: \(quizManager.xp) / \(100 + (quizManager.level - 1)*25)")
-                    .font(.caption).foregroundColor(.white.opacity(0.85))
+    // MARK: - Modern Header (Compact)
+    private var modernHeader: some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.purple.opacity(0.4),
+                                Color.blue.opacity(0.3),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 40
+                        )
+                    )
+                    .frame(width: 70, height: 70)
+                    .blur(radius: 12)
+                
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.purple, .blue],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Learn & Grow")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                
+                Text("Interactive health quizzes for your growth")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+            }
+            
             Spacer()
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.18), lineWidth: 1))
-        )
-        .padding(.horizontal)
+    }
+
+    // MARK: - Modern Stats Section (Compact)
+    private var modernStatsSection: some View {
+        HStack(spacing: 12) {
+            CompactStatCard(
+                icon: "checkmark.circle.fill",
+                value: "\(quizManager.completedQuizzes)",
+                label: "Completed",
+                color: .green,
+                gradient: [.green.opacity(0.8), .mint.opacity(0.8)]
+            )
+            
+            CompactStatCard(
+                icon: "clock.fill",
+                value: formattedTime(quizManager.learningTime),
+                label: "Time",
+                color: .blue,
+                gradient: [.blue.opacity(0.8), .cyan.opacity(0.8)]
+            )
+            
+            CompactStatCard(
+                icon: "flame.fill",
+                value: "\(quizManager.streak)",
+                label: "Streak",
+                color: .orange,
+                gradient: [.orange.opacity(0.8), .red.opacity(0.8)]
+            )
+            
+            CompactStatCard(
+                icon: "star.fill",
+                value: "\(quizManager.level)",
+                label: "Level",
+                color: .yellow,
+                gradient: [.yellow.opacity(0.8), .orange.opacity(0.8)]
+            )
+        }
+    }
+    
+    // MARK: - Modern Level Progress (Compact)
+    private var modernLevelProgress: some View {
+        GlassCard {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 5)
+                        .frame(width: 50, height: 50)
+                    
+                    Circle()
+                        .trim(from: 0, to: CGFloat(min(1.0, Double(quizManager.xp) / Double(100 + (quizManager.level - 1)*25))))
+                        .stroke(
+                            AngularGradient(
+                                gradient: Gradient(colors: [.purple, .blue, .cyan, .purple]),
+                                center: .center,
+                                startAngle: .degrees(-90),
+                                endAngle: .degrees(270)
+                            ),
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 50, height: 50)
+                        .animation(.spring(response: 0.8), value: quizManager.xp)
+                    
+                    Text("\(quizManager.level)")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Level Progress")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                        
+                        Spacer()
+                        
+                        Text("\(Int((Double(quizManager.xp) / Double(100 + (quizManager.level - 1)*25)) * 100))%")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.purple, .blue],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                    
+                    // Progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(Color.white.opacity(0.15))
+                                .frame(height: 6)
+                            
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.purple, .blue],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(
+                                    width: geo.size.width * CGFloat(min(1.0, Double(quizManager.xp) / Double(100 + (quizManager.level - 1)*25))),
+                                    height: 6
+                                )
+                        }
+                    }
+                    .frame(height: 6)
+                }
+            }
+            .padding(14)
+        }
     }
 
     private func formattedTime(_ time: TimeInterval) -> String {
@@ -263,20 +385,103 @@ struct LearningHubView: View {
     }
 }
 
-// MARK: - Quiz List
-import SwiftUI
+// MARK: - Compact Stat Card
+struct CompactStatCard: View {
+    let icon: String
+    let value: String
+    let label: String
+    let color: Color
+    let gradient: [Color]
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: gradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 36, height: 36)
+                    .shadow(color: color.opacity(0.4), radius: 6, y: 3)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            
+            VStack(spacing: 2) {
+                Text(value)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                
+                Text(label)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.04)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.2),
+                                    Color.white.opacity(0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
+    }
+}
 
-import SwiftUI
-
-struct QuizListView: View {
+// MARK: - Modern Quiz List
+struct ModernQuizListView: View {
     let quizzes: [QuizCategory]
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Available Quizzes")
-                .font(.title2.bold())
-                .foregroundColor(.white)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Available Courses")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                    
+                    Text("\(quizzes.count) topics to explore")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                
+                Spacer()
+            }
             
             LazyVStack(spacing: 14) {
                 ForEach(quizzes) { category in
@@ -286,58 +491,96 @@ struct QuizListView: View {
                     NavigationLink {
                         CategoryDetailView(category: category)
                     } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: theme.colors,
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 48, height: 48)
-                                    .shadow(
-                                        color: (theme.colors.last ?? .white).opacity(0.6),
-                                        radius: 10,
-                                        y: 6
-                                    )
-                                
-                                Image(systemName: theme.icon)
-                                    .foregroundColor(.white)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(category.title)
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                
-                                Text(category.topic)
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(.white.opacity(0.18), lineWidth: 1)
-                                )
-                        )
-                        .contentShape(RoundedRectangle(cornerRadius: 18))
+                        ModernQuizCard(category: category, theme: theme)
                     }
                     .buttonStyle(QuizCardButtonStyle())
-                    .padding(.horizontal)
                 }
             }
         }
+    }
+}
+
+// MARK: - Modern Quiz Card
+struct ModernQuizCard: View {
+    let category: QuizCategory
+    let theme: TopicTheme
+    @State private var isPressed = false
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: theme.colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 60, height: 60)
+                    .shadow(color: (theme.colors.last ?? .black).opacity(0.5), radius: 12, y: 6)
+                
+                Image(systemName: theme.icon)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(category.title)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                
+                Text(category.topic)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+                
+                HStack(spacing: 8) {
+                    Label("\(category.levels.count) Levels", systemImage: "list.number")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.15),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.25),
+                                    Color.white.opacity(0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+        )
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
+        .scaleEffect(isPressed ? 0.98 : 1.0)
     }
 }
 
@@ -421,6 +664,7 @@ struct QuizDetailView: View {
     @State private var completed = false
     @State private var showConfetti = false
     @State private var showHint = false
+    @State private var aiEnhancedExplanation: String? = nil
     @Namespace private var questionNS
 
     private var questions: [Question] { level.questions }
@@ -463,19 +707,58 @@ struct QuizDetailView: View {
     }
 
     private func header(theme: TopicTheme) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                ProgressRing(progress: CGFloat(currentProgress))
-                    .frame(width: 48, height: 48)
-                Image(systemName: theme.icon).foregroundColor(.white)
+        GlassCard {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 6)
+                        .frame(width: 56, height: 56)
+                    
+                    Circle()
+                        .trim(from: 0, to: CGFloat(currentProgress))
+                        .stroke(
+                            AngularGradient(
+                                gradient: Gradient(colors: theme.colors + [theme.colors[0]]),
+                                center: .center,
+                                startAngle: .degrees(-90),
+                                endAngle: .degrees(270)
+                            ),
+                            style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 56, height: 56)
+                        .animation(.spring(response: 0.8), value: currentProgress)
+                    
+                    Image(systemName: theme.icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(category.title)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                    
+                    Text("Question \(current + 1) of \(questions.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                
+                Spacer()
+                
+                Text("\(Int(currentProgress * 100))%")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: theme.colors,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(category.title).font(.headline).foregroundColor(.white)
-                Text(category.topic).font(.caption).foregroundColor(.white.opacity(0.85))
-            }
-            Spacer()
+            .padding(18)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 22)
     }
 
     private func emptyState(theme: TopicTheme) -> some View {
@@ -536,6 +819,10 @@ struct QuizDetailView: View {
                                     correctCount += 1
                                     quizManager.recordCorrectAnswer()
                                 }
+                                
+                                // Removed AI-enhanced explanation to save API usage
+                                // Use built-in explanation instead
+                                aiEnhancedExplanation = questions[current].explanation
                             }
                         }
                     } label: {
@@ -613,10 +900,32 @@ struct QuizDetailView: View {
                         .transition(.opacity)
 
                     DisclosureGroup(isCorrect ? "Why this is correct" : "What to learn from this") {
-                        Text(questions[current].explanation)
-                            .foregroundColor(.white.opacity(0.92))
-                            .font(.subheadline)
-                            .padding(.top, 6)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(questions[current].explanation)
+                                .foregroundColor(.white.opacity(0.92))
+                                .font(.subheadline)
+                            
+                            // AI-enhanced explanation
+                            if let aiExplanation = aiEnhancedExplanation {
+                                Divider()
+                                    .background(Color.white.opacity(0.2))
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "sparkles")
+                                        .font(.caption)
+                                        .foregroundStyle(.yellow)
+                                    
+                                    Text("AI Insight")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.white.opacity(0.9))
+                                }
+                                
+                                Text(aiExplanation)
+                                    .foregroundColor(.white.opacity(0.92))
+                                    .font(.subheadline)
+                            }
+                        }
+                        .padding(.top, 6)
                     }
                     .tint(.white)
                     .foregroundColor(.white)
@@ -705,6 +1014,7 @@ struct QuizDetailView: View {
                 selected = nil
                 reveal = false
                 showHint = false
+                aiEnhancedExplanation = nil // Reset AI explanation for next question
             }
         } else {
             quizManager.completeQuiz(title: category.title)

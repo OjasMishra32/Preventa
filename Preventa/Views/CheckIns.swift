@@ -41,7 +41,7 @@ struct CheckInsView: View {
                 HStack {
                     Spacer()
                     Button {
-                        vm.hapticLight()
+                        Hx.tap()
                         showingNewCheckIn = true
                     } label: {
                         Image(systemName: "plus")
@@ -211,6 +211,10 @@ private struct NewCheckInView: View {
                             timestamp: Date()
                         )
                         onSave(newCheckIn)
+                        
+                        // Generate AI response to check-in
+                        // Removed AI check-in response to save API usage
+                        
                         dismiss()
                     }
                     .disabled(title.isEmpty && notes.isEmpty)
@@ -278,9 +282,6 @@ final class CheckInsVM: ObservableObject {
             ])
     }
 
-    func hapticLight() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    }
 }
 
 // MARK: - Shared UI

@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 
 final class QuizManager: ObservableObject {
     @Published var completedQuizzes: Int = UserDefaults.standard.integer(forKey: "completedQuizzes")
@@ -44,6 +46,27 @@ final class QuizManager: ObservableObject {
         UserDefaults.standard.set(completedQuizzes, forKey: "completedQuizzes")
         addXP(xpPerQuizCompletion)
         updateStreak()
+        
+        // Save completion to Firestore for progress tracking
+        saveQuizCompletion(title: title)
+        
+        // Update progress
+        Task {
+            await ProgressCalculator.shared.calculateTodayProgress()
+        }
+    }
+    
+    private func saveQuizCompletion(title: String) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let db = Firestore.firestore()
+        
+        let completion: [String: Any] = [
+            "quizTitle": title,
+            "completedAt": Timestamp(date: Date())
+        ]
+        
+        db.collection("users").document(uid).collection("quizCompletions")
+            .addDocument(data: completion)
     }
     
     private func addXP(_ delta: Int) {

@@ -18,6 +18,26 @@ struct HomeView: View {
         NavigationStack(path: $path) {
             ZStack {
                 AnimatedBrandBackground().ignoresSafeArea()
+                
+                // Enhanced swipe gesture for Health Stats - swipe right to left to open health
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 50, coordinateSpace: .global)
+                            .onChanged { value in
+                                if value.translation.width < -30 {
+                                    vm.hapticLight()
+                                }
+                            }
+                            .onEnded { value in
+                                if value.translation.width < -80 {
+                                    vm.hapticSuccess()
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    path.append(Route.healthStats)
+                                    }
+                                }
+                            }
+                    )
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 22) {
@@ -58,10 +78,28 @@ struct HomeView: View {
                             path.append(route)
                         })
                         .padding(.horizontal, 22)
+                        
+                        Spacer()
+                            .frame(height: 8)
+                        
+                        // Health Stats - sophisticated placement above bottom
+                        SophisticatedHealthCard(onTap: {
+                            vm.hapticSuccess()
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            path.append(Route.healthStats)
+                            }
+                        })
+                        .padding(.horizontal, 22)
                         .padding(.bottom, 30)
                     }
                 }
                 .refreshable { await vm.refresh() }
+                .onAppear {
+                    // Recalculate progress on appear
+                    Task {
+                        await ProgressCalculator.shared.calculateTodayProgress()
+                    }
+                }
             }
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -118,29 +156,30 @@ struct HomeView: View {
                 case .guideChat:
                     PulseChatView()                 // <- go to ai chat
                 case .guideBodyMap:
-                    PulseChatView()                 // <- for now also open chat (no dead-end)
+                    BodyMapView()                  // <- body map implementation
                 case .plan:
-                    StubScreen(title: "Plan")
+                    PlanView()
                 case .meds:
                     MedTrackerView()
                 case .medsToday:
                     MedTrackerView()
                 case .learn:
-                    // Create a local manager so we never crash if nothing was injected above.
+                    // LearningHubView already uses @EnvironmentObject, will use the one from PreventaApp
                     LearningHubView()
-                        .environmentObject(QuizManager())
                 case .visualChecks:
-                    StubScreen(title: "Visuals")
+                    VisualChecksView()
                 case .checkIns:
                     CheckInsView()
                 case .actionPlans:
-                    StubScreen(title: "Actions")
+                    ActionsView()
                 case .resources:
-                    StubScreen(title: "Resources")
+                    ResourcesView()
                 case .me:
-                    StubScreen(title: "Me")
+                    MeView()
                 case .settings:
-                    StubScreen(title: "Settings")
+                    MeView() // Settings redirects to Me
+                case .healthStats:
+                    HealthDashboardView()
                 }
             }
         }
@@ -153,15 +192,17 @@ enum Route: Hashable {
     case guideChat, guideBodyMap
     case plan, meds, medsToday, learn
     case visualChecks, checkIns, actionPlans
-    case resources, me, settings
+    case resources, me, settings, healthStats
 }
 
 // MARK: - ViewModel
 
 final class HomeVM: ObservableObject {
     @Published var displayFirstName: String = "there"
-    @Published var todayProgress: CGFloat = 0.62
+    @Published var todayProgress: CGFloat = 0.0
     @Published var itemsDue: Int = 2
+    
+    private let progressCalculator = ProgressCalculator.shared
 
     var todayString: String {
         let fmt = DateFormatter()
@@ -169,14 +210,26 @@ final class HomeVM: ObservableObject {
         return fmt.string(from: Date())
     }
 
-    func load() { fetchFirstName() }
+    func load() {
+        fetchFirstName()
+        setupProgressTracking()
+    }
+    
+    private func setupProgressTracking() {
+        // Observe progress calculator
+        progressCalculator.$todayProgress
+            .assign(to: &$todayProgress)
+        
+        // Calculate initial progress
+        Task {
+            await progressCalculator.calculateTodayProgress()
+        }
+    }
 
     @MainActor
     func refresh() async {
-        try? await Task.sleep(nanoseconds: 600_000_000)
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
-            todayProgress = min(0.95, todayProgress + 0.04)
-        }
+        // Recalculate progress instead of fake increment
+        await progressCalculator.calculateTodayProgress()
     }
 
     private func fetchFirstName() {
@@ -199,28 +252,6 @@ final class HomeVM: ObservableObject {
 }
 
 // MARK: - Components
-
-private struct AnimatedBrandBackground1: View {
-    @State private var phase: CGFloat = 0
-    var body: some View {
-        LinearGradient(
-            colors: [Color.purple.opacity(0.92), Color.blue.opacity(0.86)],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-        .overlay(
-            AngularGradient(
-                gradient: Gradient(colors: [.white.opacity(0.08), .clear, .white.opacity(0.06), .clear]),
-                center: .center,
-                angle: .degrees(Double(phase))
-            )
-        )
-        .onAppear {
-            withAnimation(.linear(duration: 18).repeatForever(autoreverses: false)) {
-                phase = 360
-            }
-        }
-    }
-}
 
 private struct HeaderGreeting: View {
     let name: String
@@ -481,25 +512,6 @@ private struct FeatureTile: View {
 
 // MARK: - Shared UI bits
 
-private struct GlassCard1<Content: View>: View {
-    let expand: Bool
-    let content: Content
-    init(expand: Bool = true, @ViewBuilder content: () -> Content) {
-        self.expand = expand
-        self.content = content()
-    }
-    var body: some View {
-        content
-            .padding(18)
-            .frame(maxWidth: expand ? .infinity : nil, alignment: .leading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.18), lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 18, y: 10)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-    }
-}
-
 private struct AnimatedProgressRing: View {
     let progress: CGFloat
     @Binding var animate: Bool
@@ -627,6 +639,287 @@ private struct ActionPill: View {
             .scaleEffect(pressed ? 0.97 : 1.0)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SophisticatedHealthCard: View {
+    let onTap: () -> Void
+    @EnvironmentObject var healthManager: HealthKitManager
+    @State private var pulse = false
+    
+    var body: some View {
+        Button(action: onTap) {
+            GlassCard {
+                VStack(spacing: 18) {
+                    // Header with icon and title
+                    HStack(spacing: 16) {
+                        // Enhanced pulsing icon
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [
+                                            .red.opacity(0.9),
+                                            .pink.opacity(0.8),
+                                            .red.opacity(0.6)
+                                        ],
+                                        center: .center,
+                                        startRadius: 0,
+                                        endRadius: 40
+                                    )
+                                )
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [.white.opacity(0.5), .white.opacity(0.2)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 2.5
+                                        )
+                                )
+                                .shadow(color: .red.opacity(0.5), radius: pulse ? 20 : 10, y: 6)
+                                .scaleEffect(pulse ? 1.08 : 1.0)
+                            
+                            Image(systemName: "heart.text.square.fill")
+                                .font(.system(size: 26, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .symbolEffect(.pulse, value: pulse)
+                        }
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                                pulse = true
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Health Dashboard")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.white)
+                            
+                            if healthManager.isAuthorized {
+                                Text("Live data from Apple Health")
+                                    .font(.caption)
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.green.opacity(0.9), .mint.opacity(0.9)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            } else {
+                                Text("Tap to connect Apple Health")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.75))
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.red.opacity(0.9), .pink.opacity(0.9)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                    
+                    // Stats grid - uniform and beautiful
+                    if healthManager.isAuthorized && hasHealthData {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ], spacing: 12) {
+                            HealthMetricPill(
+                                icon: "figure.walk",
+                                value: formatValue(healthManager.healthData.steps),
+                                label: "Steps",
+                                color: .cyan,
+                                progress: min(1.0, Double(healthManager.healthData.steps) / 10000.0)
+                            )
+                            
+                            HealthMetricPill(
+                                icon: "bed.double.fill",
+                                value: String(format: "%.1f", healthManager.healthData.sleepHours),
+                                label: "Sleep",
+                                color: .indigo,
+                                progress: min(1.0, healthManager.healthData.sleepHours / 8.0)
+                            )
+                            
+                            HealthMetricPill(
+                                icon: "heart.fill",
+                                value: healthManager.healthData.heartRate > 0 ? "\(healthManager.healthData.heartRate)" : "--",
+                                label: "BPM",
+                                color: .red,
+                                progress: healthManager.healthData.heartRate > 0 ? 0.7 : 0.0
+                            )
+                        }
+                    } else {
+                        // Elegant call-to-action when not connected
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.9))
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Connect Apple Health")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text("Sync your health data automatically")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [.white.opacity(0.3), .white.opacity(0.1)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1.5
+                                        )
+                                )
+                        )
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .buttonStyle(.plain)
+        .onAppear {
+            // Check authorization and load data when card appears
+            healthManager.checkAuthorizationStatus()
+            if healthManager.isAuthorized {
+                healthManager.loadHealthData()
+            }
+        }
+        .onChange(of: healthManager.isAuthorized) { _ in
+            // Reload data when authorization changes
+            if healthManager.isAuthorized {
+                healthManager.loadHealthData()
+            }
+        }
+    }
+    
+    private var hasHealthData: Bool {
+        healthManager.healthData.steps > 0 ||
+        healthManager.healthData.sleepHours > 0 ||
+        healthManager.healthData.heartRate > 0
+    }
+    
+    private func formatValue(_ value: Int) -> String {
+        if value >= 1000 {
+            return String(format: "%.1fK", Double(value) / 1000.0)
+        }
+        return "\(value)"
+    }
+}
+
+private struct HealthMetricPill: View {
+    let icon: String
+    let value: String
+    let label: String
+    let color: Color
+    let progress: Double
+    @State private var animatedProgress: Double = 0
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // Icon with progress ring
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.2), lineWidth: 3)
+                    .frame(width: 44, height: 44)
+                
+                Circle()
+                    .trim(from: 0, to: animatedProgress)
+                    .stroke(
+                        AngularGradient(
+                            colors: [color.opacity(0.9), color.opacity(0.6)],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    )
+                    .frame(width: 44, height: 44)
+                    .rotationEffect(.degrees(-90))
+                
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            
+            // Value and label
+            VStack(spacing: 2) {
+                Text(value)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(color.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            withAnimation(.spring(response: 0.8).delay(0.2)) {
+                animatedProgress = progress
+            }
+        }
+    }
+}
+
+private struct StatChip: View {
+    let label: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(color)
+            Text(value)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+            if !label.isEmpty {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.15))
+                .overlay(Capsule().stroke(color.opacity(0.4), lineWidth: 1.5))
+        )
     }
 }
 

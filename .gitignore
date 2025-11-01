@@ -1,2 +1,15 @@
+# Secrets
+.env
+Preventa/.env
+
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# macOS
+.DS_Store
 .DS_Store
 Preventa.xcodeproj/**/xcuserdata/

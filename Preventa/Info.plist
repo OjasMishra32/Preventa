@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>OPENAI_API_KEY</key>
-	<string>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</string>
+	<key>GEMINI_API_KEY</key>
+	<string>AIzaSyDA7Snd75jlgaP9A_UIXReXJI1MbWpiGS8</string>
 </dict>
 </plist>
