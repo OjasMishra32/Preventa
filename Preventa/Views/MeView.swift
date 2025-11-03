@@ -959,19 +959,34 @@ struct EditProfileView: View {
                 }
                 vm.dateOfBirth = dateOfBirth
                 
-                // Update height and weight in VM and HealthKitManager
+                // Update height and weight in VM immediately
                 if heightValue > 0 {
                     print("💾 Updating height: \(heightValue) inches")
                     vm.height = heightValue
-                    HealthKitManager.shared.healthData.height = heightValue
                 }
                 if weightValue > 0 {
                     print("💾 Updating weight: \(weightValue) pounds")
                     vm.weight = weightValue
-                    HealthKitManager.shared.healthData.weight = weightValue
                 }
                 
-                // Save to HealthKit if available and values are provided
+                // Update HealthKitManager.shared.healthData immediately to trigger UI updates
+                // Replace entire struct to trigger @Published properly
+                var updatedData = HealthKitManager.shared.healthData
+                if heightValue > 0 {
+                    updatedData.height = heightValue
+                    print("💾 Setting HealthKitManager height: \(heightValue)")
+                }
+                if weightValue > 0 {
+                    updatedData.weight = weightValue
+                    print("💾 Setting HealthKitManager weight: \(weightValue)")
+                }
+                HealthKitManager.shared.healthData = updatedData
+                
+                // Calculate and log BMI immediately
+                let bmi = HealthKitManager.shared.healthData.bmi
+                print("✅ BMI calculated: \(bmi?.description ?? "N/A") (height: \(HealthKitManager.shared.healthData.height), weight: \(HealthKitManager.shared.healthData.weight))")
+                
+                // Save to HealthKit in background (this will also update healthData internally)
                 if heightValue > 0 || weightValue > 0 {
                     Task {
                         print("💾 Syncing to HealthKit...")
@@ -983,8 +998,7 @@ struct EditProfileView: View {
                             await HealthKitManager.shared.saveWeight(pounds: weightValue)
                             print("✅ Weight saved to HealthKit")
                         }
-                        let bmi = HealthKitManager.shared.healthData.bmi
-                        print("✅ HealthKit sync completed - BMI: \(bmi?.description ?? "N/A")")
+                        print("✅ HealthKit sync completed")
                     }
                 }
                 

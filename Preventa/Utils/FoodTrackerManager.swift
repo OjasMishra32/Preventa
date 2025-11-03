@@ -17,9 +17,16 @@ final class FoodTrackerManager: ObservableObject {
     }()
     private var uid: String? { Auth.auth().currentUser?.uid }
     
+    // Store listener reference for cleanup
+    private var mealsListener: ListenerRegistration?
+    
     private init() {
         // Don't call loadMeals() in init - wait until Firebase is configured
         // loadMeals() will be called when needed or after Firebase is ready
+    }
+    
+    deinit {
+        stopListening()
     }
     
     // Call this after Firebase is configured
@@ -28,10 +35,13 @@ final class FoodTrackerManager: ObservableObject {
     }
     
     func loadMeals() {
+        // Remove existing listener if any
+        stopListening()
+        
         guard let uid else { return }
         let today = Calendar.current.startOfDay(for: Date())
         
-        db.collection("users").document(uid).collection("meals")
+        mealsListener = db.collection("users").document(uid).collection("meals")
             .whereField("timestamp", isGreaterThan: Timestamp(date: today))
             .order(by: "timestamp", descending: true)
             .addSnapshotListener { [weak self] snapshot, _ in
@@ -41,6 +51,11 @@ final class FoodTrackerManager: ObservableObject {
                 }
                 self.updateTodaysCalories()
             }
+    }
+    
+    func stopListening() {
+        mealsListener?.remove()
+        mealsListener = nil
     }
     
     func addMeal(_ meal: FoodEntry) {
@@ -65,6 +80,18 @@ final class FoodTrackerManager: ObservableObject {
         db.collection("users").document(uid).collection("meals")
             .document(meal.id)
             .delete()
+        
+        updateTodaysCalories()
+    }
+    
+    func updateMeal(_ meal: FoodEntry) {
+        guard let uid else { return }
+        try? db.collection("users").document(uid).collection("meals")
+            .document(meal.id)
+            .setData(from: meal, merge: true)
+        
+        // Update HealthKit
+        HealthKitManager.shared.saveFoodEntry(name: meal.name, calories: Double(meal.calories))
         
         updateTodaysCalories()
     }

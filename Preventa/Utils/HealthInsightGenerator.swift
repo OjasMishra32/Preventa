@@ -37,23 +37,19 @@ class HealthInsightGenerator {
     func generateInsights(from healthData: HealthData, weeklySteps: [Date: Int]) async -> [HealthInsight] {
         var insights: [HealthInsight] = []
         
-        // Generate AI-powered insights first
-        if let aiInsight = await generateAIInsight(healthData: healthData, weeklySteps: weeklySteps) {
-            insights.append(aiInsight)
-        }
-        
-        // Add rule-based insights as backup/enhancement
+        // Generate comprehensive critical insights
         insights.append(contentsOf: analyzeSteps(healthData: healthData, weeklySteps: weeklySteps))
         insights.append(contentsOf: analyzeSleep(healthData: healthData))
         insights.append(contentsOf: analyzeHeartRate(healthData: healthData))
         insights.append(contentsOf: analyzeActivity(healthData: healthData))
         insights.append(contentsOf: analyzeHydration(healthData: healthData))
         insights.append(contentsOf: analyzeCorrelations(healthData: healthData))
+        insights.append(contentsOf: analyzeCriticalRecommendations(healthData: healthData))
         
         // Sort by priority
         insights.sort { $0.priority.rawValue > $1.priority.rawValue }
         
-        return Array(insights.prefix(5)) // Return top 5 insights
+        return Array(insights.prefix(6)) // Return top 6 critical insights
     }
     
     // MARK: - AI-Powered Insight Generation (Disabled to save API calls)
@@ -313,6 +309,90 @@ class HealthInsightGenerator {
                     priority: .medium
                 ))
             }
+        }
+        
+        return insights
+    }
+    
+    private func analyzeCriticalRecommendations(healthData: HealthData) -> [HealthInsight] {
+        var insights: [HealthInsight] = []
+        
+        // Critical daily recommendations based on health score
+        let healthScore = healthData.healthScore
+        
+        if healthScore < 50 {
+            insights.append(HealthInsight(
+                type: .warning,
+                title: "Critical: Low Health Score",
+                message: "Your health score is \(Int(healthScore)). Focus on improving sleep, increasing activity, and staying hydrated today. Even small changes can make a big difference.",
+                icon: "exclamationmark.triangle.fill",
+                color: .red,
+                priority: .high
+            ))
+        } else if healthScore < 70 {
+            insights.append(HealthInsight(
+                type: .recommendation,
+                title: "Improve Your Health Score",
+                message: "Your health score is \(Int(healthScore)). You're doing well, but there's room for improvement. Try adding a 15-minute walk, drinking more water, or getting better sleep tonight.",
+                icon: "arrow.up.circle.fill",
+                color: .orange,
+                priority: .high
+            ))
+        } else if healthScore >= 80 {
+            insights.append(HealthInsight(
+                type: .achievement,
+                title: "Excellent Health Score!",
+                message: "Your health score is \(Int(healthScore)) - excellent work! Keep maintaining this balance of activity, sleep, and nutrition.",
+                icon: "star.fill",
+                color: .green,
+                priority: .high
+            ))
+        }
+        
+        // Specific actionable recommendations
+        if healthData.stepsProgress < 0.5 && healthData.exerciseProgress < 0.5 {
+            insights.append(HealthInsight(
+                type: .recommendation,
+                title: "Action: Increase Activity",
+                message: "You're below 50% on both steps and exercise. Try a 20-minute walk, take the stairs, or do a quick workout. Your body needs movement for optimal health.",
+                icon: "figure.walk",
+                color: .cyan,
+                priority: .high
+            ))
+        }
+        
+        if healthData.sleepHours < 6 {
+            insights.append(HealthInsight(
+                type: .warning,
+                title: "Critical: Sleep Deficiency",
+                message: "You got only \(String(format: "%.1f", healthData.sleepHours)) hours of sleep. Aim for 7-9 hours tonight. Poor sleep affects your immune system, mood, and overall health.",
+                icon: "bed.double.fill",
+                color: .orange,
+                priority: .high
+            ))
+        }
+        
+        if healthData.waterProgress < 0.5 {
+            insights.append(HealthInsight(
+                type: .recommendation,
+                title: "Stay Hydrated",
+                message: "You're at \(Int(healthData.waterProgress * 100))% of your water goal. Drink \(Int((healthData.waterIntakeGoal - healthData.waterIntakeOz) / 8)) more glasses of water today. Hydration is crucial for energy and focus.",
+                icon: "drop.fill",
+                color: .blue,
+                priority: .medium
+            ))
+        }
+        
+        // Activity and calories balance
+        if healthData.activeCalories < 300 && healthData.dietaryCalories > 1500 {
+            insights.append(HealthInsight(
+                type: .recommendation,
+                title: "Balance Activity and Nutrition",
+                message: "You've consumed \(healthData.dietaryCalories) calories but burned only \(healthData.activeCalories) active calories. Consider adding more movement or adjusting your calorie intake for better balance.",
+                icon: "scalemass",
+                color: .purple,
+                priority: .medium
+            ))
         }
         
         return insights

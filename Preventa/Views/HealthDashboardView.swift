@@ -45,39 +45,39 @@ struct HealthDashboardView: View {
             AnimatedBrandBackground().ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Enhanced Tab selector with better design
+                // Enhanced Tab selector
                 EnhancedTabSelector(selectedTab: $selectedTab)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    .padding(.bottom, 12)
                 
                 // Content
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
+                    VStack(spacing: 20) {
                         // Quick Stats Bar (always visible)
                         QuickHealthStatsBar(healthManager: healthManager)
-                            .padding(.horizontal, 22)
+                            .padding(.horizontal, 20)
                         
                         switch selectedTab {
                         case .today:
-                            SophisticatedTodayView(
+                            TodayTabView(
                                 healthManager: healthManager,
                                 foodTracker: foodTracker,
                                 waterTracker: waterTracker
                             )
                         case .activity:
-                            SophisticatedActivityView(healthManager: healthManager)
+                            ActivityTabView(healthManager: healthManager)
                         case .nutrition:
-                            SophisticatedNutritionView(
+                            NutritionTabView(
                                 foodTracker: foodTracker,
                                 waterTracker: waterTracker
                             )
                         case .body:
-                            SophisticatedBodyView(healthManager: healthManager)
+                            BodyTabView(healthManager: healthManager)
                         }
                     }
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 20)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .padding(.bottom, 40)
                 }
             }
@@ -86,11 +86,13 @@ struct HealthDashboardView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                 Button {
-                    healthManager.loadHealthData()
-                        foodTracker.loadMeals()
-                        waterTracker.loadTodaysIntake()
+                        Task {
+                            await healthManager.loadHealthData()
+                            await foodTracker.loadMeals()
+                            await waterTracker.loadTodaysIntake()
+                        }
                         Hx.ok()
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -110,23 +112,42 @@ struct HealthDashboardView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            HealthSettingsView(
-                healthManager: healthManager,
-                waterTracker: waterTracker
-            )
+            HealthSettingsView()
         }
-        .onAppear {
-            healthManager.loadHealthData()
-            foodTracker.loadMeals()
-            waterTracker.loadTodaysIntake()
+        .task {
+            // Load data immediately on appear with error handling
+            do {
+                await healthManager.loadHealthData()
+            } catch {
+                print("⚠️ HealthDashboard: Error loading health data: \(error.localizedDescription)")
+            }
             
-            // Auto-refresh every 60 seconds
-            refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-                healthManager.loadHealthData()
+            do {
+                await foodTracker.loadMeals()
+            } catch {
+                print("⚠️ HealthDashboard: Error loading meals: \(error.localizedDescription)")
+            }
+            
+            do {
+                await waterTracker.loadTodaysIntake()
+            } catch {
+                print("⚠️ HealthDashboard: Error loading water intake: \(error.localizedDescription)")
+            }
+            
+            // Set up refresh timer
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+                Task {
+                    do {
+                        await healthManager.loadHealthData()
+                    } catch {
+                        print("⚠️ HealthDashboard: Error in timer refresh: \(error.localizedDescription)")
+                    }
+                }
             }
         }
         .onDisappear {
             refreshTimer?.invalidate()
+            refreshTimer = nil
         }
     }
 }
@@ -139,7 +160,7 @@ struct EnhancedTabSelector: View {
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 ForEach(HealthDashboardView.HealthTab.allCases, id: \.self) { tab in
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
@@ -147,9 +168,27 @@ struct EnhancedTabSelector: View {
                         }
                         Hx.tap()
                     } label: {
-                        VStack(spacing: 6) {
+                        VStack(spacing: 8) {
                             ZStack {
+                                // Enhanced glow for selected tab
                                 if selectedTab == tab {
+                                    Circle()
+                                        .fill(
+                                            RadialGradient(
+                                                colors: [
+                                                    tabColor(tab).opacity(0.4),
+                                                    tabColor(tab).opacity(0.2),
+                                                    Color.clear
+                                                ],
+                                                center: .center,
+                                                startRadius: 10,
+                                                endRadius: 30
+                                            )
+                                        )
+                                        .frame(width: 60, height: 60)
+                                        .blur(radius: 8)
+                                        .offset(y: 0) // Ensure centered
+                                    
                                     Circle()
                                         .fill(
                                             LinearGradient(
@@ -158,84 +197,90 @@ struct EnhancedTabSelector: View {
                                                 endPoint: .bottomTrailing
                                             )
                                         )
+                                        .frame(width: 50, height: 50)
                                         .matchedGeometryEffect(id: "selectedTab", in: tabAnimation)
                                         .shadow(color: .purple.opacity(0.4), radius: 8, y: 4)
                                 } else {
                                     Circle()
                                         .fill(Color.white.opacity(0.1))
+                                        .frame(width: 50, height: 50)
                                 }
                                 
                                 Image(systemName: tab.icon)
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(size: 18, weight: selectedTab == tab ? .semibold : .medium))
                                     .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.7))
                             }
-                            .frame(width: 44, height: 44)
+                            .frame(width: 50, height: 50)
+                            .padding(.top, 8) // Add padding to prevent cutoff
+                            .padding(.bottom, 0)
                             
                             Text(tab.rawValue)
-                                .font(.system(size: 13, weight: selectedTab == tab ? .bold : .semibold, design: .rounded))
+                                .font(.caption.weight(selectedTab == tab ? .semibold : .regular))
                                 .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.7))
+                                .lineLimit(1)
                         }
-                        .frame(width: 70)
-                        .padding(.vertical, 8)
+                        .frame(width: 72)
+                        .padding(.vertical, 8) // Add vertical padding to container
                     }
                 }
             }
             .padding(.horizontal, 4)
+            .padding(.vertical, 8) // Add padding to ensure full visibility
+        }
+        .frame(height: 110) // Ensure enough height for glow effects
+    }
+    
+    private func tabColor(_ tab: HealthDashboardView.HealthTab) -> Color {
+        switch tab {
+        case .today: return .purple
+        case .activity: return .blue
+        case .nutrition: return .orange
+        case .body: return .green
         }
     }
 }
 
-// MARK: - Sophisticated Today View
+// MARK: - Today Tab View
 
-struct SophisticatedTodayView: View {
+struct TodayTabView: View {
     @ObservedObject var healthManager: HealthKitManager
     @ObservedObject var foodTracker: FoodTrackerManager
     @ObservedObject var waterTracker: WaterTrackerManager
     @State private var insights: [HealthInsight] = []
-    @State private var animate = false
+    @State private var animateScore = false
     
     var body: some View {
-        VStack(spacing: 24) {
-            // Header with date and summary
-            TodayHeaderView(healthManager: healthManager)
+        VStack(spacing: 20) {
+            // Comprehensive Health Score Card
+            ComprehensiveHealthScoreCard(healthManager: healthManager, animateScore: $animateScore)
+            
+            // Steps and Miles at Top
+            HStack(spacing: 16) {
+                StepsMilesCard(
+                    steps: healthManager.healthData.steps,
+                    miles: healthManager.healthData.miles,
+                    stepsGoal: healthManager.healthData.stepsGoal,
+                    stepsProgress: healthManager.healthData.stepsProgress,
+                    onEditSteps: { newGoal in
+                        UserDefaults.standard.set(newGoal, forKey: "stepsGoal")
+                        Task {
+                            await healthManager.loadHealthData()
+                        }
+                    }
+                )
+            }
             
             // AI Insights Section
             if !insights.isEmpty {
-                SophisticatedInsightsSection(insights: insights)
+                InsightsCard(insights: insights)
             }
             
-            // Key Metrics Grid - Enhanced with edit capabilities
+            // Key Metrics Grid
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: 16),
                 GridItem(.flexible(), spacing: 16)
             ], spacing: 16) {
-                EditableMetricCard(
-                    title: "Steps",
-                    value: healthManager.healthData.steps,
-                    goal: healthManager.healthData.stepsGoal,
-                    progress: healthManager.healthData.stepsProgress,
-                    icon: "figure.walk",
-                    colors: [.cyan, .blue],
-                    unit: "steps",
-                    onEdit: { newGoal in
-                        // Allow editing goal
-                    }
-                )
-                
-                EditableMetricCard(
-                    title: "Water",
-                    value: Int(waterTracker.todaysIntake),
-                    goal: Int(waterTracker.goal),
-                    progress: waterTracker.progress,
-                    icon: "drop.fill",
-                    colors: [.blue, .cyan],
-                    unit: "oz",
-                    onEdit: { newGoal in
-                        waterTracker.setGoal(Double(newGoal))
-                    }
-                )
-                
-                EditableMetricCard(
+                DashboardMetricCard(
                     title: "Active Calories",
                     value: healthManager.healthData.activeCalories,
                     goal: 500,
@@ -243,40 +288,59 @@ struct SophisticatedTodayView: View {
                     icon: "flame.fill",
                     colors: [.orange, .red],
                     unit: "kcal",
-                    onEdit: nil
+                    onEdit: { newGoal in
+                        UserDefaults.standard.set(newGoal, forKey: "activeCaloriesGoal")
+                        Task {
+                            await healthManager.loadHealthData()
+                        }
+                    }
                 )
                 
-                EditableMetricCard(
-                    title: "Food Calories",
-                    value: foodTracker.todaysCalories,
-                    goal: 2000,
-                    progress: min(1.0, Double(foodTracker.todaysCalories) / 2000.0),
-                    icon: "fork.knife",
+                DashboardMetricCard(
+                    title: "Exercise",
+                    value: healthManager.healthData.exerciseMinutes,
+                    goal: healthManager.healthData.exerciseGoal,
+                    progress: healthManager.healthData.exerciseProgress,
+                    icon: "figure.run",
                     colors: [.green, .mint],
-                    unit: "kcal",
-                    onEdit: nil
+                    unit: "min",
+                    onEdit: { newGoal in
+                        UserDefaults.standard.set(newGoal, forKey: "exerciseGoal")
+                        Task {
+                            await healthManager.loadHealthData()
+                        }
+                    }
                 )
+                
+                DashboardMetricCard(
+                    title: "Sleep",
+                    value: Int(healthManager.healthData.sleepHours * 10) / 10,
+                    goal: Int(healthManager.healthData.sleepGoal * 10) / 10,
+                    progress: healthManager.healthData.sleepProgress,
+                    icon: "bed.double.fill",
+                    colors: [.indigo, .purple],
+                    unit: "hrs",
+                    valueFormatter: { v in
+                        String(format: "%.1f", Double(v) / 10.0)
+                    },
+                    onEdit: { newGoal in
+                        healthManager.saveSleepGoal(hours: Double(newGoal) / 10.0)
+                    }
+                )
+                
+                // Heart Rate Card - Always show
+                HeartRateCard(bpm: healthManager.healthData.heartRate)
             }
             
-            // Health Metrics Row
-            HStack(spacing: 16) {
-            if healthManager.healthData.sleepHours > 0 {
-                    SophisticatedSleepCard(hours: healthManager.healthData.sleepHours)
-            }
+            // Trend Charts Section
+            HealthTrendChartsCard(healthManager: healthManager)
             
-            if healthManager.healthData.heartRate > 0 {
-                    SophisticatedHeartRateCard(bpm: healthManager.healthData.heartRate)
-                }
+            // Additional Vital Signs
+            if healthManager.healthData.systolicBP > 0 || healthManager.healthData.oxygenSaturation > 0 {
+                VitalSignsCard(healthManager: healthManager)
             }
-            
-            // Quick Actions - Enhanced
-            SophisticatedQuickActions(
-                waterTracker: waterTracker,
-                foodTracker: foodTracker
-            )
         }
         .task {
-            // Generate AI-powered insights when view appears
             let aiInsights = await HealthInsightGenerator.shared.generateInsights(
                 from: healthManager.healthData,
                 weeklySteps: healthManager.healthData.weeklySteps
@@ -284,37 +348,23 @@ struct SophisticatedTodayView: View {
             await MainActor.run {
                 insights = aiInsights
             }
-        }
-        .onChange(of: healthManager.healthData.steps) { _, _ in
-            // Regenerate insights when health data changes
-            Task {
-                let aiInsights = await HealthInsightGenerator.shared.generateInsights(
-                    from: healthManager.healthData,
-                    weeklySteps: healthManager.healthData.weeklySteps
-                )
-                await MainActor.run {
-                    insights = aiInsights
-                }
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6).delay(0.1)) {
-                animate = true
+            withAnimation(.spring(response: 0.8).delay(0.2)) {
+                animateScore = true
             }
         }
     }
 }
 
-// MARK: - Today Header
+// MARK: - Today Header Card
 
-struct TodayHeaderView: View {
+struct TodayHeaderCard: View {
     @ObservedObject var healthManager: HealthKitManager
     @State private var currentTime = Date()
     
     var body: some View {
         GlassCard {
-        HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(formattedDate)
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.white)
@@ -335,18 +385,13 @@ struct TodayHeaderView: View {
                     } else {
                         Button {
                             Task { @MainActor in
-                                print("🔵 UI: Authorization button tapped")
                                 let authorized = await healthManager.requestAuthorization()
-                                print("🔵 UI: Authorization result: \(authorized)")
-                                
-                                // Update authorization status manually in case it hasn't updated yet
                                 healthManager.checkAuthorizationStatus()
                                 
                                 if authorized {
                                     Hx.ok()
                                 } else {
-                                    // Still try to load data - status might be slow to update
-                                    healthManager.loadHealthData()
+                                    await healthManager.loadHealthData()
                                     Hx.warn()
                                 }
                             }
@@ -375,27 +420,46 @@ struct TodayHeaderView: View {
                 Spacer()
                 
                 // Overall health score
-                VStack(spacing: 4) {
-                    Text("\(healthScore)")
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .foregroundStyle(
+                VStack(spacing: 6) {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 10)
+                            .frame(width: 75, height: 75)
+                        
+                        Circle()
+                            .trim(from: 0, to: healthScore)
+                            .stroke(
                             LinearGradient(
-                                colors: healthScoreColor,
+                                    colors: [.green, .blue],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(lineWidth: 10, lineCap: .round)
                             )
-                        )
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 75, height: 75)
+                        
+                        Text("\(Int(healthScore * 100))")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
                     Text("Health Score")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
                 }
             }
+            .padding(20)
         }
         .onAppear {
-            // Update time every minute
-            Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
                 currentTime = Date()
             }
+            RunLoop.main.add(timer, forMode: .common)
         }
     }
     
@@ -411,52 +475,37 @@ struct TodayHeaderView: View {
         return formatter.string(from: currentTime)
     }
     
-    private var healthScore: Int {
-        var score = 0
-        let data = healthManager.healthData
+    private var healthScore: Double {
+        var score = 0.0
+        var count = 0
         
-        // Steps (0-30 points)
-        score += min(30, Int(data.stepsProgress * 30))
-        
-        // Sleep (0-25 points)
-        if data.sleepHours >= 7 && data.sleepHours <= 9 {
-            score += 25
-        } else if data.sleepHours >= 6 && data.sleepHours < 10 {
-            score += 15
-        } else {
-            score += 5
+        if healthManager.healthData.steps > 0 {
+            score += min(1.0, Double(healthManager.healthData.steps) / 10000.0)
+            count += 1
         }
         
-        // Heart Rate (0-20 points)
-        if data.heartRate >= 60 && data.heartRate <= 100 {
-            score += 20
-        } else if data.heartRate > 0 {
-            score += 10
+        if healthManager.healthData.activeCalories > 0 {
+            score += min(1.0, Double(healthManager.healthData.activeCalories) / 500.0)
+            count += 1
         }
         
-        // Activity (0-15 points)
-        score += min(15, data.activeCalories / 33)
-        
-        // Water (0-10 points)
-        let waterProgress = data.waterIntakeOz / 64.0
-        score += Int(waterProgress * 10)
-        
-        return min(100, score)
-    }
-    
-    private var healthScoreColor: [Color] {
-        switch healthScore {
-        case 80...100: return [.green.opacity(0.9), .mint.opacity(0.9)]
-        case 60..<80: return [.blue.opacity(0.9), .cyan.opacity(0.9)]
-        case 40..<60: return [.orange.opacity(0.9), .yellow.opacity(0.9)]
-        default: return [.red.opacity(0.9), .pink.opacity(0.9)]
+        if healthManager.healthData.sleepHours > 0 {
+            score += min(1.0, healthManager.healthData.sleepHours / 8.0)
+            count += 1
         }
+        
+        if healthManager.healthData.waterIntakeOz > 0 {
+            score += min(1.0, healthManager.healthData.waterIntakeOz / 64.0)
+            count += 1
+        }
+        
+        return count > 0 ? score / Double(count) : 0.5
     }
 }
 
-// MARK: - Editable Metric Card
+// MARK: - Metric Card
 
-struct EditableMetricCard: View {
+struct DashboardMetricCard: View {
     let title: String
     let value: Int
     let goal: Int
@@ -464,11 +513,16 @@ struct EditableMetricCard: View {
     let icon: String
     let colors: [Color]
     let unit: String
+    let valueFormatter: ((Int) -> String)?
     let onEdit: ((Int) -> Void)?
+    
     @State private var showEditSheet = false
     @State private var editedGoal: Int
+    @State private var animateProgress = false
+    @State private var pulse = false
+    @State private var hover = false
     
-    init(title: String, value: Int, goal: Int, progress: Double, icon: String, colors: [Color], unit: String, onEdit: ((Int) -> Void)?) {
+    init(title: String, value: Int, goal: Int, progress: Double, icon: String, colors: [Color], unit: String, valueFormatter: ((Int) -> String)? = nil, onEdit: ((Int) -> Void)?) {
         self.title = title
         self.value = value
         self.goal = goal
@@ -476,6 +530,7 @@ struct EditableMetricCard: View {
         self.icon = icon
         self.colors = colors
         self.unit = unit
+        self.valueFormatter = valueFormatter
         self.onEdit = onEdit
         self._editedGoal = State(initialValue: goal)
     }
@@ -484,23 +539,54 @@ struct EditableMetricCard: View {
         GlassCard(expand: false) {
             VStack(alignment: .leading, spacing: 14) {
                 // Header with icon and edit button
-                HStack {
+                HStack(alignment: .center) {
             ZStack {
+                        // Enhanced glow effect
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        colors[0].opacity(0.6),
+                                        colors[1].opacity(0.3),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 10,
+                                    endRadius: 30
+                                )
+                            )
+                            .frame(width: 60, height: 60)
+                            .blur(radius: 8)
+                            .opacity(pulse ? 0.8 : 0.5)
+                        
                 Circle()
                     .fill(
                         LinearGradient(
-                                    colors: colors.map { $0.opacity(0.8) },
+                                    colors: colors.map { $0.opacity(0.9) },
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                            .frame(width: 44, height: 44)
-                            .shadow(color: colors[0].opacity(0.4), radius: 8, y: 4)
+                            .frame(width: 50, height: 50)
+                            .shadow(color: colors[0].opacity(0.6), radius: pulse ? 12 : 8, y: 4)
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.3), .white.opacity(0.1)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1.5
+                                    )
+                            )
                 
                         Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
+                            .symbolEffect(.pulse, value: pulse)
             }
+                    .scaleEffect(pulse ? 1.05 : 1.0)
             
                     Spacer()
                     
@@ -511,54 +597,111 @@ struct EditableMetricCard: View {
                         } label: {
                             Image(systemName: "pencil.circle.fill")
                                 .font(.title3)
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.9), .white.opacity(0.6)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 
-                // Value display
+                // Value display with animation
             VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text("\(value)")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                        Text(valueFormatter?(value) ?? "\(value)")
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.white, .white.opacity(0.95)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                             .lineLimit(1)
                             .minimumScaleFactor(0.4)
                             .fixedSize(horizontal: false, vertical: true)
+                            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                         Text(unit)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.75))
                             .lineLimit(1)
                     }
                     
                     Text("\(Int(progress * 100))% of \(goal) goal")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
-                // Progress bar with gradient
+                // Enhanced animated progress bar
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.15))
-                            .frame(height: 8)
+                        // Background with glow
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.2),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(height: 10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
                         
-                        RoundedRectangle(cornerRadius: 6)
+                        // Animated progress fill
+                        RoundedRectangle(cornerRadius: 8)
                 .fill(
                     LinearGradient(
-                                    colors: colors,
+                                    colors: colors + [colors[0].opacity(0.8)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: geo.size.width * CGFloat(progress), height: 8)
+                            .frame(width: animateProgress ? geo.size.width * CGFloat(progress) : 0, height: 10)
+                            .shadow(color: colors[0].opacity(0.5), radius: 4, x: 0, y: 2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.3), .clear],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                            )
+                            .animation(.spring(response: 1.0, dampingFraction: 0.8), value: animateProgress)
                     }
                 }
-                .frame(height: 8)
+                .frame(height: 10)
+            }
+            .padding(20)
         }
-        .padding(18)
+        .scaleEffect(hover ? 1.02 : 1.0)
+        .shadow(color: colors[0].opacity(hover ? 0.3 : 0.15), radius: hover ? 16 : 8, y: hover ? 8 : 4)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hover)
+        .onAppear {
+            withAnimation(.spring(response: 0.8).delay(0.1)) {
+                animateProgress = true
+            }
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+        .onDisappear {
+            pulse = false
+            animateProgress = false
         }
         .sheet(isPresented: $showEditSheet) {
             if let onEdit = onEdit {
@@ -608,88 +751,62 @@ struct EditGoalSheet: View {
                 AnimatedBrandBackground().ignoresSafeArea()
                 
                 VStack(spacing: 24) {
-                    VStack(spacing: 8) {
-                        Text("Edit Goal")
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("Edit \(title) Goal")
                             .font(.title2.weight(.bold))
                             .foregroundStyle(.white)
-                        Text("Set your daily goal for \(title.lowercased())")
+                            
+                            Text("Current goal: \(currentGoal) \(unit)")
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .padding(.top, 40)
-                    
-                    GlassCard {
-                        VStack(spacing: 20) {
-                            HStack {
-                                Text("Current Goal")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.white.opacity(0.7))
-                                Spacer()
-                                Text("\(currentGoal) \(unit)")
-                                    .font(.headline)
-                                    .foregroundStyle(.white)
-                            }
-                            
-                            Divider()
-                                .background(Color.white.opacity(0.2))
                             
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("New Goal")
-                                    .font(.headline.weight(.semibold))
+                                    .font(.headline)
                                     .foregroundStyle(.white)
                                 
-                                HStack(spacing: 16) {
+                                HStack {
                                     Button {
                                         if newGoal > 0 {
-                                            newGoal = max(0, newGoal - 100)
-                                        }
+                                            newGoal = max(0, newGoal - (unit == "steps" ? 1000 : (unit == "oz" ? 8 : 100)))
                                         Hx.tap()
+                                        }
                                     } label: {
                                         Image(systemName: "minus.circle.fill")
                                             .font(.title2)
                                             .foregroundStyle(.white.opacity(0.8))
                                     }
+                                    .buttonStyle(.plain)
                                     
                                     TextField("", value: $newGoal, format: .number)
-                                        .keyboardType(.numberPad)
-                                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
                                         .foregroundStyle(.white)
                                         .multilineTextAlignment(.center)
+                                        .keyboardType(.numberPad)
+                                        .textFieldStyle(.plain)
                                         .frame(maxWidth: .infinity)
                                     
-                                    Text(unit)
-                                        .font(.title3)
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    
                                     Button {
-                                        newGoal += 100
+                                        newGoal += (unit == "steps" ? 1000 : (unit == "oz" ? 8 : 100))
                                         Hx.tap()
                                     } label: {
                                         Image(systemName: "plus.circle.fill")
                                             .font(.title2)
                                             .foregroundStyle(.white.opacity(0.8))
                                     }
+                                    .buttonStyle(.plain)
                                 }
-                                
-                                // Quick set buttons
-                                HStack(spacing: 12) {
-                                    ForEach([500, 1000, 1500], id: \.self) { quickValue in
-                                        Button {
-                                            newGoal = quickValue
-                                            Hx.tap()
-                                        } label: {
-                                            Text("\(quickValue)")
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(newGoal == quickValue ? .white : .white.opacity(0.8))
-                                                .frame(maxWidth: .infinity)
-                                                .padding(.vertical, 10)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
         .background(
-                                                    Capsule()
-                                                        .fill(newGoal == quickValue ? Color.purple.opacity(0.5) : Color.white.opacity(0.1))
-                                                )
-                                        }
-                                    }
-                                }
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.white.opacity(0.1))
+                                )
+                                
+                                Text("Unit: \(unit)")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.6))
                             }
                         }
                         .padding(24)
@@ -740,136 +857,67 @@ struct EditGoalSheet: View {
                     .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("")
+            .navigationTitle("Edit Goal")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        onCancel()
-                        dismiss()
-                    }
-                    .foregroundStyle(.white)
-                }
-            }
         }
     }
 }
 
-// MARK: - Sophisticated Insights Section
+// MARK: - Insights Card
 
-struct SophisticatedInsightsSection: View {
+struct InsightsCard: View {
     let insights: [HealthInsight]
     
     var body: some View {
+        GlassCard {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(
+                HStack {
+                    Image(systemName: "sparkles")
+                        .font(.title3)
+                        .foregroundStyle(
                             LinearGradient(
-                                colors: [.blue.opacity(0.8), .purple.opacity(0.8)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                colors: [.yellow, .orange],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
                         )
-                        .frame(width: 36, height: 36)
-                    
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                
                 Text("AI Insights")
-                    .font(.title3.weight(.bold))
+                        .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
             }
             
             ForEach(insights) { insight in
-                SophisticatedInsightCard(insight: insight)
-            }
-        }
-    }
-}
-
-struct SophisticatedInsightCard: View {
-    let insight: HealthInsight
-    @State private var isVisible = false
-    
-    var body: some View {
-        GlassCard {
-            HStack(spacing: 16) {
-                // Enhanced icon
-                    ZStack {
+                    HStack(alignment: .top, spacing: 12) {
                         Circle()
-                            .fill(
-                            RadialGradient(
-                                colors: [
-                                    insight.color.opacity(0.9),
-                                    insight.color.opacity(0.6)
-                                ],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 30
-                            )
-                        )
-                        .frame(width: 52, height: 52)
-                        .shadow(color: insight.color.opacity(0.4), radius: 12, y: 4)
-                    
-                    Image(systemName: insight.icon)
-                        .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.white)
-                }
-                
-                VStack(alignment: .leading, spacing: 6) {
+                            .fill(insight.color.opacity(0.3))
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 6)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
                     Text(insight.title)
-                        .font(.headline.weight(.bold))
+                                .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    
                     Text(insight.message)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.85))
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                
-                Spacer()
-                
-                // Priority badge
-                VStack(spacing: 4) {
-                    Circle()
-                        .fill(
-                            insight.priority == .high
-                                ? LinearGradient(colors: [.red, .orange], startPoint: .top, endPoint: .bottom)
-                                : LinearGradient(colors: [insight.color, insight.color.opacity(0.6)], startPoint: .top, endPoint: .bottom)
-                        )
-                        .frame(width: 10, height: 10)
-                        .shadow(color: insight.color.opacity(0.6), radius: 4)
-                    
-                    Text(insight.priority == .high ? "!" : "•")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.9))
+                    }
                 }
             }
             .padding(20)
         }
-        .opacity(isVisible ? 1.0 : 0.0)
-        .offset(y: isVisible ? 0 : 20)
-        .onAppear {
-            withAnimation(.spring(response: 0.5).delay(0.1)) {
-                isVisible = true
-            }
-        }
     }
 }
 
-// MARK: - Sophisticated Sleep Card
+// MARK: - Sleep Card
 
-struct SophisticatedSleepCard: View {
+struct SleepCard: View {
     let hours: Double
-    @State private var animate = false
     
     var body: some View {
         GlassCard(expand: false) {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
                 ZStack {
                     Circle()
@@ -880,10 +928,11 @@ struct SophisticatedSleepCard: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                            .frame(width: 50, height: 50)
+                            .frame(width: 44, height: 44)
+                            .shadow(color: .indigo.opacity(0.4), radius: 8, y: 4)
                         
                     Image(systemName: "bed.double.fill")
-                            .font(.title3)
+                            .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white)
                     }
                     
@@ -891,32 +940,844 @@ struct SophisticatedSleepCard: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Sleep")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "%.1f", hours))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("hours")
-                        .font(.caption)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.4)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("hrs")
+                            .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.7))
-                
-                // Sleep quality indicator
-                    HStack(spacing: 4) {
-                        ForEach(0..<5) { i in
-                            Circle()
-                                .fill(i < 4 ? Color.white.opacity(0.9) : Color.white.opacity(0.3))
-                                .frame(width: 6, height: 6)
-                        }
+                            .lineLimit(1)
                     }
-                    .padding(.top, 4)
+                    
+                    Text("\(Int((hours / 8.0) * 100))% of recommended")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.15))
+                            .frame(height: 8)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.indigo, .purple],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geo.size.width * CGFloat(min(1.0, hours / 8.0)), height: 8)
+                    }
+                }
+                .frame(height: 8)
             }
             .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+// MARK: - Heart Rate Card
+
+struct HeartRateCard: View {
+    let bpm: Int
+    
+    var body: some View {
+        GlassCard(expand: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                ZStack {
+                    Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.red.opacity(0.8), .pink.opacity(0.8)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .shadow(color: .red.opacity(0.4), radius: 8, y: 4)
+                    
+                    Image(systemName: "heart.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    
+                    Spacer()
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(bpm > 0 ? "\(bpm)" : "--")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    Text("bpm")
+                            .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                    
+                    Text("Resting heart rate")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.15))
+                            .frame(height: 8)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                            LinearGradient(
+                                    colors: [.red, .pink],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                            .frame(width: geo.size.width * CGFloat(bpm > 0 ? min(1.0, Double(bpm) / 100.0) : 0.7), height: 8)
+                    }
+                }
+                .frame(height: 8)
+            }
+            .padding(18)
+        }
+    }
+}
+
+// MARK: - Quick Actions Card
+
+// MARK: - Edit Meal Sheet
+
+struct EditMealSheet: View {
+    let meal: FoodEntry
+    @ObservedObject var foodTracker: FoodTrackerManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var editedName: String
+    @State private var editedCalories: Int
+    @State private var editedMealType: FoodEntry.MealType
+    
+    init(meal: FoodEntry, foodTracker: FoodTrackerManager) {
+        self.meal = meal
+        self.foodTracker = foodTracker
+        self._editedName = State(initialValue: meal.name)
+        self._editedCalories = State(initialValue: meal.calories)
+        self._editedMealType = State(initialValue: meal.mealType)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AnimatedBrandBackground().ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("Edit Meal")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(.white)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Food Name")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                TextField("Food name", text: $editedName)
+                                    .padding(12)
+                                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                                        .foregroundStyle(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Calories")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                TextField("", value: $editedCalories, format: .number)
+                                    .keyboardType(.numberPad)
+                                    .padding(12)
+                                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Meal Type")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                
+                                ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                        ForEach(FoodEntry.MealType.allCases, id: \.self) { type in
+                                    Button {
+                                                editedMealType = type
+                                        Hx.tap()
+                                    } label: {
+                                                Text(type.rawValue)
+                                            .font(.subheadline.weight(.semibold))
+                                                    .foregroundStyle(editedMealType == type ? .white : .white.opacity(0.7))
+                                                    .padding(.horizontal, 16)
+                                                    .padding(.vertical, 10)
+                                            .background(
+                                                Capsule()
+                                                            .fill(editedMealType == type ? type.color.opacity(0.5) : Color.white.opacity(0.1))
+                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(24)
+                    }
+                    .padding(.horizontal, 22)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 16) {
+                            Button {
+                                dismiss()
+                            } label: {
+                            Text("Cancel")
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.white.opacity(0.15))
+                                )
+                        }
+                        
+                                    Button {
+                            let updatedMeal = FoodEntry(
+                                id: meal.id,
+                                name: editedName,
+                                calories: editedCalories,
+                                timestamp: meal.timestamp,
+                                mealType: editedMealType
+                            )
+                            foodTracker.updateMeal(updatedMeal)
+                                Hx.ok()
+                            dismiss()
+                                    } label: {
+                                        HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                Text("Save")
+                                                .fontWeight(.semibold)
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+                                        .background(
+                                            LinearGradient(
+                                    colors: [.green.opacity(0.9), .mint.opacity(0.9)],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            ),
+                                    in: RoundedRectangle(cornerRadius: 16)
+                                        )
+                                    }
+                        .disabled(editedName.isEmpty || editedCalories <= 0)
+                        }
+                        .padding(.horizontal, 22)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle("Edit Meal")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+
+// MARK: - Activity Tab View
+
+struct ActivityTabView: View {
+    @ObservedObject var healthManager: HealthKitManager
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            // Steps and Miles at Top
+            StepsMilesCard(
+                steps: healthManager.healthData.steps,
+                miles: healthManager.healthData.miles,
+                stepsGoal: healthManager.healthData.stepsGoal,
+                stepsProgress: healthManager.healthData.stepsProgress,
+                onEditSteps: { newGoal in
+                    UserDefaults.standard.set(newGoal, forKey: "stepsGoal")
+                    Task {
+                        await healthManager.loadHealthData()
+                    }
+                }
+            )
+            
+            // Activity Metrics Grid
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16)
+            ], spacing: 16) {
+                DashboardMetricCard(
+                    title: "Active Calories",
+                    value: healthManager.healthData.activeCalories,
+                    goal: 500,
+                    progress: min(1.0, Double(healthManager.healthData.activeCalories) / 500.0),
+                    icon: "flame.fill",
+                    colors: [.orange, .red],
+                    unit: "kcal",
+                    onEdit: nil
+                )
+                
+                DashboardMetricCard(
+                    title: "Exercise",
+                    value: healthManager.healthData.exerciseMinutes,
+                    goal: healthManager.healthData.exerciseGoal,
+                    progress: healthManager.healthData.exerciseProgress,
+                    icon: "figure.run",
+                    colors: [.green, .mint],
+                    unit: "min",
+                    onEdit: { newGoal in
+                        UserDefaults.standard.set(newGoal, forKey: "exerciseGoal")
+                        Task {
+                            await healthManager.loadHealthData()
+                        }
+                    }
+                )
+            }
+            
+            // Weekly Steps Chart
+            let weeklyStepsArray = Array(healthManager.healthData.weeklySteps.values.sorted())
+            if !weeklyStepsArray.isEmpty {
+        GlassCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                            Image(systemName: "chart.bar.fill")
+                                .font(.title3)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.blue, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                            Text("Weekly Steps")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(.white)
+                    Spacer()
+                        }
+                        
+                        WeeklyStepsChart(steps: weeklyStepsArray)
+                    }
+                    .padding(24)
+                }
+            }
+        }
+    }
+}
+
+struct ActivityStatRow: View {
+    let icon: String
+    let label: String
+    let value: String
+    let progress: Double
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+                                HStack {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 30)
+                
+                Text(label)
+                    .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.8))
+                
+                                    Spacer()
+                
+                Text(value)
+                    .font(.headline.weight(.bold))
+                                        .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                                                .fill(Color.white.opacity(0.15))
+                        .frame(height: 6)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: geo.size.width * CGFloat(progress), height: 6)
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+}
+
+struct WeeklyStepsChart: View {
+    let steps: [Int]
+    @State private var animateBars = false
+    
+    var maxSteps: Int {
+        steps.max() ?? 1
+    }
+    
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, stepCount in
+                VStack(spacing: 8) {
+                    ZStack(alignment: .bottom) {
+                        // Background
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(width: 36, height: 130)
+                        
+                        // Animated bar with glow
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.cyan.opacity(0.9),
+                                        Color.blue.opacity(0.9),
+                                        Color.cyan.opacity(0.8)
+                                    ],
+                                    startPoint: .bottom,
+                                    endPoint: .top
+                                )
+                            )
+                            .frame(
+                                width: 36,
+                                height: animateBars ? max(6, CGFloat(stepCount) / CGFloat(maxSteps) * 120) : 0
+                            )
+                            .shadow(color: .cyan.opacity(0.5), radius: 6, x: 0, y: -2)
+            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                            colors: [.white.opacity(0.4), .clear],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                            )
+                            .animation(
+                                .spring(response: 0.8, dampingFraction: 0.7)
+                                    .delay(Double(index) * 0.1),
+                                value: animateBars
+                            )
+                    }
+                    
+                    Text(dayAbbreviation(index))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .frame(height: 150)
+        .onAppear {
+            withAnimation {
+                animateBars = true
+            }
+        }
+    }
+    
+    private func dayAbbreviation(_ index: Int) -> String {
+        let calendar = Calendar.current
+        let today = calendar.component(.weekday, from: Date())
+        let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let dayIndex = (today - 7 + index) % 7
+        return days[dayIndex]
+    }
+}
+
+// MARK: - Nutrition Tab View
+
+struct NutritionTabView: View {
+    @ObservedObject var foodTracker: FoodTrackerManager
+    @ObservedObject var waterTracker: WaterTrackerManager
+    @State private var selectedMeal: FoodEntry?
+    @State private var showEditMeal = false
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            // Water Card - Editable
+            EditableWaterCard(
+                waterTracker: waterTracker,
+                onEdit: { newGoal in
+                    waterTracker.setGoal(Double(newGoal))
+                }
+            )
+            
+            // Food Calories Card - Editable
+            EditableFoodCaloriesCard(
+                foodTracker: foodTracker,
+                onEdit: { newGoal in
+                    UserDefaults.standard.set(newGoal, forKey: "caloriesGoal")
+                }
+            )
+            
+            // Recent Meals - Editable
+            if !foodTracker.meals.isEmpty {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                            Image(systemName: "clock.fill")
+                        .font(.title3)
+                        .foregroundStyle(
+                            LinearGradient(
+                                        colors: [.orange, .red],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                            Text("Recent Meals")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                }
+                
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 12) {
+                                ForEach(foodTracker.meals.prefix(10)) { meal in
+                                    Button {
+                                        selectedMeal = meal
+                                        showEditMeal = true
+                                        Hx.tap()
+                                    } label: {
+                                        MealRow(meal: meal)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 300)
+                    }
+                    .padding(24)
+                }
+            }
+        }
+        .sheet(isPresented: $showEditMeal) {
+            if let meal = selectedMeal {
+                EditMealSheet(meal: meal, foodTracker: foodTracker)
+            }
+        }
+    }
+}
+
+struct NutritionStatRow: View {
+    let icon: String
+    let label: String
+    let value: String
+    let goal: Int
+    let color: Color
+    
+    var progress: Double {
+        let cleanedValue = value.replacingOccurrences(of: " kcal", with: "")
+            .replacingOccurrences(of: " oz", with: "")
+            .replacingOccurrences(of: " mi", with: "")
+        if let numValue = Double(cleanedValue) {
+            return min(1.0, numValue / Double(goal))
+        }
+        return 0.0
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 30)
+            
+                Text(label)
+                .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+            
+            Spacer()
+                
+                Text(value)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.15))
+                        .frame(height: 6)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: geo.size.width * CGFloat(progress), height: 6)
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+}
+
+struct MealRow: View {
+    let meal: FoodEntry
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(meal.mealType.color.opacity(0.3))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Image(systemName: meal.mealType.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(meal.mealType.color)
+                )
+            
+                    VStack(alignment: .leading, spacing: 4) {
+                Text(meal.name)
+                        .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                
+                Text(meal.mealType.rawValue.capitalized)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                    }
+                    
+                    Spacer()
+                    
+            Text("\(meal.calories) kcal")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.05))
+        )
+    }
+}
+
+// MARK: - Body Tab View
+
+struct BodyTabView: View {
+    @ObservedObject var healthManager: HealthKitManager
+    @State private var showEditWeight = false
+    @State private var showEditHeight = false
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            if let bmi = healthManager.healthData.bmi {
+                BMICard(
+                    bmi: bmi,
+                    weight: healthManager.healthData.weight,
+                    height: healthManager.healthData.height,
+                    onEditWeight: { showEditWeight = true },
+                    onEditHeight: { showEditHeight = true }
+                )
+            } else {
+                // No BMI data
+                GlassCard {
+                    VStack(spacing: 20) {
+                        Image(systemName: "person.fill.questionmark")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.white.opacity(0.7))
+                        
+                        Text("No Body Metrics")
+                            .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    
+                        Text("Add your weight and height in Apple Health to see your BMI and body metrics here.")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(32)
+                }
+            }
+            
+            // Body Metrics Grid
+            if healthManager.healthData.weight > 0 || healthManager.healthData.height > 0 {
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ], spacing: 16) {
+                    if healthManager.healthData.weight > 0 {
+                        BodyMetricCard(
+                            label: "Weight",
+                            value: String(format: "%.1f", healthManager.healthData.weight),
+                            unit: "lbs",
+                            icon: "scalemass.fill",
+                            color: .blue,
+                            onEdit: { showEditWeight = true }
+                        )
+                    }
+                    
+                    if healthManager.healthData.height > 0 {
+                        BodyMetricCard(
+                            label: "Height",
+                            value: String(format: "%.1f", healthManager.healthData.height),
+                            unit: "in",
+                            icon: "ruler.fill",
+                            color: .purple,
+                            onEdit: { showEditHeight = true }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct BMICard: View {
+    let bmi: Double
+    let weight: Double
+    let height: Double
+    let onEditWeight: () -> Void
+    let onEditHeight: () -> Void
+    @State private var animate = false
+    
+    var category: (String, Color) {
+        switch bmi {
+        case ..<18.5: return ("Underweight", .blue)
+        case 18.5..<25: return ("Normal", .green)
+        case 25..<30: return ("Overweight", .orange)
+        default: return ("Obese", .red)
+        }
+    }
+    
+    var body: some View {
+        GlassCard {
+            VStack(spacing: 24) {
+                HStack {
+                    Text("Body Mass Index")
+                        .font(.headline.weight(.semibold))
+                                                .foregroundStyle(.white)
+                    
+                    Spacer()
+                    
+                    Text(category.0)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(category.1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                                                .background(
+                                                    Capsule()
+                                .fill(category.1.opacity(0.2))
+                                                        .overlay(
+                                                            Capsule()
+                                        .stroke(category.1.opacity(0.5), lineWidth: 1.5)
+                                )
+                        )
+                }
+                
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 18)
+                        .frame(width: 150, height: 150)
+                    
+                    Circle()
+                        .trim(from: 0, to: animate ? min(1.0, bmi / 40.0) : 0)
+                        .stroke(
+                            AngularGradient(
+                                gradient: Gradient(colors: [category.1, category.1.opacity(0.6)]),
+                                center: .center
+                            ),
+                            style: StrokeStyle(lineWidth: 18, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 150, height: 150)
+                        .animation(.spring(response: 0.8), value: animate)
+                    
+                    VStack(spacing: 6) {
+                        Text(String(format: "%.1f", bmi))
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                                                .foregroundStyle(.white)
+                                        .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("BMI")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                
+                HStack(spacing: 24) {
+                    if weight > 0 {
+                        VStack(spacing: 4) {
+                            Text(String(format: "%.1f", weight))
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Weight (lbs)")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                                .lineLimit(1)
+                            Button {
+                                onEditWeight()
+                                    Hx.tap()
+                            } label: {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
+                    }
+                    
+                    if height > 0 {
+                        VStack(spacing: 4) {
+                            Text(String(format: "%.1f", height))
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Height (in)")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                                .lineLimit(1)
+                            Button {
+                                onEditHeight()
+                                Hx.tap()
+                            } label: {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
+                    }
+                }
+            }
+            .padding(24)
         }
         .onAppear {
             withAnimation(.spring().delay(0.2)) {
@@ -926,1218 +1787,72 @@ struct SophisticatedSleepCard: View {
     }
 }
 
-// MARK: - Sophisticated Heart Rate Card
-
-struct SophisticatedHeartRateCard: View {
-    let bpm: Int
-    @State private var pulse = false
+struct BodyMetricCard: View {
+    let label: String
+    let value: String
+    let unit: String
+    let icon: String
+    let color: Color
+    let onEdit: () -> Void
     
     var body: some View {
         GlassCard(expand: false) {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                ZStack {
-                    Circle()
-                        .fill(Color.red.opacity(0.3))
-                            .frame(width: 50, height: 50)
-                            .scaleEffect(pulse ? 1.15 : 1.0)
-                    
-                    Image(systemName: "heart.fill")
-                            .font(.title3)
-                        .foregroundStyle(.red)
-                        .symbolEffect(.pulse, value: pulse)
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [color.opacity(0.8), color.opacity(0.6)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .shadow(color: color.opacity(0.4), radius: 8, y: 4)
+                        
+            Image(systemName: icon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
                     
                     Spacer()
-                }
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Heart Rate")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                    Text("\(bpm)")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("bpm")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
                     
-                    Text(statusText)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(statusColor)
-                        .padding(.top, 4)
+                    Button {
+                        onEdit()
+                        Hx.tap()
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                }
+            
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value)
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.4)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(unit)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+            
+            Text(label)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear {
-            pulse = true
-        }
-    }
-    
-    private var statusText: String {
-        switch bpm {
-        case 0..<60: return "Resting"
-        case 60..<100: return "Normal"
-        case 100..<140: return "Active"
-        default: return "Elevated"
-        }
-    }
-    
-    private var statusColor: Color {
-        switch bpm {
-        case 60..<100: return .green
-        case 100..<140: return .orange
-        default: return .red
-        }
-    }
-}
-
-// MARK: - Sophisticated Quick Actions
-
-struct SophisticatedQuickActions: View {
-    @ObservedObject var waterTracker: WaterTrackerManager
-    @ObservedObject var foodTracker: FoodTrackerManager
-    @State private var showFoodTracker = false
-    @State private var showWaterPicker = false
-    
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Image(systemName: "bolt.fill")
-                        .font(.title3)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                Text("Quick Actions")
-                        .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                }
-                
-                HStack(spacing: 12) {
-                    // Water quick add
-                    QuickActionButton(
-                        icon: "drop.fill",
-                        title: "Water",
-                        subtitle: "Quick add",
-                        color: .blue,
-                        action: {
-                            showWaterPicker = true
-                        }
-                    )
-                    
-                    // Food tracker
-                    QuickActionButton(
-                        icon: "fork.knife",
-                        title: "Food",
-                        subtitle: "Log meal",
-                        color: .green,
-                        action: {
-                            showFoodTracker = true
-                        }
-                    )
-                }
-            }
-            .padding(20)
-        }
-        .sheet(isPresented: $showFoodTracker) {
-            NavigationStack {
-            FoodTrackerView()
-            }
-        }
-        .sheet(isPresented: $showWaterPicker) {
-            WaterQuickAddSheet(tracker: waterTracker)
-        }
-    }
-}
-
-struct QuickActionButton: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: {
-            Hx.tap()
-            action()
-        }) {
-            VStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [color.opacity(0.6), color.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(height: 50)
-                    
-                Image(systemName: icon)
-                        .font(.title2.weight(.semibold))
-                    .foregroundStyle(.white)
-                }
-                
-                VStack(spacing: 2) {
-                Text(title)
-                        .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-        }
-    }
-}
-
-// MARK: - Water Quick Add Sheet
-
-struct WaterQuickAddSheet: View {
-    @ObservedObject var tracker: WaterTrackerManager
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedAmount: Double = 8.0
-    
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                AnimatedBrandBackground().ignoresSafeArea()
-                
-                VStack(spacing: 24) {
-                    GlassCard {
-                        VStack(spacing: 20) {
-                            Image(systemName: "drop.fill")
-                                .font(.system(size: 48))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.blue, .cyan],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                            
-                            Text("Add Water")
-                                .font(.title2.weight(.bold))
-                                .foregroundStyle(.white)
-                            
-                            // Amount selector
-                            HStack(spacing: 16) {
-                                Button {
-                                    if selectedAmount > 0 {
-                                        selectedAmount = max(0, selectedAmount - 4)
-                                    }
-                                    Hx.tap()
-                                } label: {
-                                    Image(systemName: "minus.circle.fill")
-                                        .font(.title)
-                                        .foregroundStyle(.white.opacity(0.8))
-                                }
-                                
-                                VStack(spacing: 4) {
-                                    Text(String(format: "%.0f", selectedAmount))
-                                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.white)
-                                    Text("ounces")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.white.opacity(0.7))
-                                }
-                                .frame(maxWidth: .infinity)
-                                
-                                Button {
-                                    selectedAmount += 4
-                                    Hx.tap()
-                                } label: {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.title)
-                                        .foregroundStyle(.white.opacity(0.8))
-                                }
-                            }
-                            
-                            // Quick buttons
-                            HStack(spacing: 12) {
-                                ForEach([8.0, 16.0, 20.0], id: \.self) { amount in
-                                    Button {
-                                        selectedAmount = amount
-                                        Hx.tap()
-                                    } label: {
-                                        Text("\(Int(amount))oz")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(selectedAmount == amount ? .white : .white.opacity(0.8))
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 12)
-                                            .background(
-                                                Capsule()
-                                                    .fill(selectedAmount == amount ? Color.blue.opacity(0.5) : Color.white.opacity(0.1))
-                                            )
-                                    }
-                                }
-                            }
-                            
-                            Button {
-                                tracker.addWater(ounces: selectedAmount)
-                                dismiss()
-                                Hx.ok()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text("Add \(String(format: "%.0f", selectedAmount)) oz")
-                                        .fontWeight(.semibold)
-                                }
-                                .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                                    LinearGradient(
-                                        colors: [.blue.opacity(0.9), .cyan.opacity(0.9)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ),
-                                    in: RoundedRectangle(cornerRadius: 16)
-                                )
-                            }
-                        }
-                        .padding(28)
-                    }
-                    .padding(.horizontal, 22)
-                }
-                .padding(.top, 40)
-            }
-            .navigationTitle("Add Water")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Health Settings View
-
-struct HealthSettingsView: View {
-    @ObservedObject var healthManager: HealthKitManager
-    @ObservedObject var waterTracker: WaterTrackerManager
-    @Environment(\.dismiss) private var dismiss
-    @State private var showHealthAuthorization = false
-    
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                AnimatedBrandBackground().ignoresSafeArea()
-                
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
-                        // Health Connection Status
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 16) {
-                                HStack {
-                                    Image(systemName: healthManager.isAuthorized ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(healthManager.isAuthorized ? .green : .red)
-                                    
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Apple Health")
-                                            .font(.headline.weight(.semibold))
-                                            .foregroundStyle(.white)
-                                        Text(healthManager.isAuthorized ? "Connected" : "Not Connected")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.white.opacity(0.8))
-                                    }
-                                    
-                                    Spacer()
-                                }
-                                
-                                if !healthManager.isAuthorized {
-                                    Button {
-                                        showHealthAuthorization = true
-                                        Hx.tap()
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: "link")
-                                            Text("Connect Apple Health")
-                                                .fontWeight(.semibold)
-                                        }
-                                        .foregroundStyle(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .background(
-                                            LinearGradient(
-                                                colors: [.blue.opacity(0.8), .purple.opacity(0.8)],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            in: RoundedRectangle(cornerRadius: 12)
-                                        )
-                                    }
-                                }
-                            }
-                            .padding(20)
-                        }
-                        .padding(.horizontal, 22)
-                        
-                        // Water Goal Settings
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text("Water Goal")
-                                    .font(.headline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                
-                                HStack {
-                                    Text("Daily Goal")
-                                        .foregroundStyle(.white.opacity(0.8))
-                                    Spacer()
-                                    Text("\(Int(waterTracker.goal)) oz")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                }
-                                
-                                Button {
-                                    // Edit water goal
-                                    Hx.tap()
-                                } label: {
-                                    Text("Edit Goal")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .fill(Color.white.opacity(0.15))
-                                        )
-                                }
-                            }
-                            .padding(20)
-                        }
-                        .padding(.horizontal, 22)
-                    }
-                    .padding(.vertical, 20)
-                }
-            }
-            .navigationTitle("Health Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(.white)
-                }
-            }
-            .task {
-                if showHealthAuthorization {
-                    let authorized = await healthManager.requestAuthorization()
-                    if authorized {
-                        healthManager.loadHealthData()
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Majestic Activity View
-
-struct SophisticatedActivityView: View {
-    @ObservedObject var healthManager: HealthKitManager
-    @State private var animate = false
-    @State private var selectedMetric: ActivityMetricType = .steps
-    
-    enum ActivityMetricType {
-        case steps, distance, calories, heartRate
-    }
-    
-    var body: some View {
-        VStack(spacing: 28) {
-            // Hero Metric Card - Large, prominent display
-            MajesticHeroMetricCard(healthManager: healthManager, selectedMetric: $selectedMetric)
-            
-            // Weekly Steps Chart - Enhanced
-            EnhancedWeeklyStepsChart(weeklySteps: healthManager.healthData.weeklySteps)
-            
-            // Interactive Metric Selector
-            MetricTypeSelector(selectedMetric: $selectedMetric)
-            
-            // Detailed Metric Cards Grid - Innovative Layout
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 16),
-                GridItem(.flexible(), spacing: 16)
-            ], spacing: 20) {
-                MajesticActivityCard(
-                    title: "Steps Today",
-                    value: healthManager.healthData.steps,
-                    formattedValue: formatSteps(healthManager.healthData.steps),
-                    subtitle: "Goal: 10,000",
-                    icon: "figure.walk",
-                    colors: [.cyan, .blue],
-                    progress: min(1.0, Double(healthManager.healthData.steps) / 10000.0),
-                    secondaryInfo: "\(calculateStepsPercentile())% percentile"
-                )
-                
-                MajesticActivityCard(
-                    title: "Distance",
-                    value: Int(Double(healthManager.healthData.steps) * 0.0005),
-                    formattedValue: String(format: "%.2f mi", Double(healthManager.healthData.steps) * 0.0005),
-                    subtitle: "miles walked",
-                    icon: "map.fill",
-                    colors: [.blue, .indigo],
-                    progress: min(1.0, (Double(healthManager.healthData.steps) * 0.0005) / 5.0),
-                    secondaryInfo: "≈ \(Int(Double(healthManager.healthData.steps) * 0.0005 * 5280)) ft"
-                )
-                
-                MajesticActivityCard(
-                    title: "Active Calories",
-                    value: healthManager.healthData.activeCalories,
-                    formattedValue: "\(healthManager.healthData.activeCalories) kcal",
-                    subtitle: "energy burned",
-                    icon: "flame.fill",
-                    colors: [.orange, .red],
-                    progress: min(1.0, Double(healthManager.healthData.activeCalories) / 500.0),
-                    secondaryInfo: "≈ \(Int(Double(healthManager.healthData.activeCalories) / 3.5)) min jogging"
-                )
-                
-                MajesticActivityCard(
-                    title: "Heart Rate",
-                    value: healthManager.healthData.heartRate,
-                    formattedValue: healthManager.healthData.heartRate > 0 ? "\(healthManager.healthData.heartRate) bpm" : "-- bpm",
-                    subtitle: "resting rate",
-                    icon: "heart.fill",
-                    colors: [.red, .pink],
-                    progress: healthManager.healthData.heartRate > 0 ? 0.75 : 0.0,
-                    secondaryInfo: healthManager.healthData.heartRate > 0 ? heartRateZone : "No data"
-                )
-            }
-            
-            // Activity Insights Card
-            ActivityInsightsCard(healthManager: healthManager)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6).delay(0.1)) {
-                animate = true
-            }
-        }
-    }
-    
-    private func formatSteps(_ steps: Int) -> String {
-        if steps >= 10000 {
-            return "\(steps / 1000)k+"
-        } else if steps >= 1000 {
-            return String(format: "%.1fk", Double(steps) / 1000.0)
-        }
-        return "\(steps)"
-    }
-    
-    private func calculateStepsPercentile() -> Int {
-        let steps = healthManager.healthData.steps
-        if steps >= 12000 { return 90 }
-        if steps >= 10000 { return 75 }
-        if steps >= 8000 { return 50 }
-        if steps >= 5000 { return 25 }
-        return 10
-    }
-    
-    private var heartRateZone: String {
-        let bpm = healthManager.healthData.heartRate
-        if bpm >= 100 { return "Elevated" }
-        if bpm >= 60 { return "Normal" }
-        return "Low"
-    }
-}
-
-// MARK: - Majestic Activity Components
-
-struct MajesticHeroMetricCard: View {
-    @ObservedObject var healthManager: HealthKitManager
-    @Binding var selectedMetric: SophisticatedActivityView.ActivityMetricType
-    @State private var pulse = false
-    
-    var currentValue: (value: String, icon: String, colors: [Color], progress: Double) {
-        switch selectedMetric {
-        case .steps:
-            return (
-                formatNumber(healthManager.healthData.steps),
-                "figure.walk",
-                [.cyan, .blue],
-                min(1.0, Double(healthManager.healthData.steps) / 10000.0)
-            )
-        case .distance:
-            let miles = Double(healthManager.healthData.steps) * 0.0005
-            return (
-                String(format: "%.2f", miles),
-                "map.fill",
-                [.blue, .indigo],
-                min(1.0, miles / 5.0)
-            )
-        case .calories:
-            return (
-                "\(healthManager.healthData.activeCalories)",
-                "flame.fill",
-                [.orange, .red],
-                min(1.0, Double(healthManager.healthData.activeCalories) / 500.0)
-            )
-        case .heartRate:
-            return (
-                healthManager.healthData.heartRate > 0 ? "\(healthManager.healthData.heartRate)" : "--",
-                "heart.fill",
-                [.red, .pink],
-                0.75
-            )
-        }
-    }
-    
-    var body: some View {
-        GlassCard {
-            VStack(spacing: 24) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Today's Activity")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                        
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(currentValue.value)
-                                .font(.system(size: 56, weight: .bold, design: .rounded))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: currentValue.colors,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .contentTransition(.numericText())
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.3)
-                                .fixedSize(horizontal: false, vertical: true)
-                            
-                            Text(selectedMetric == .distance ? "mi" : selectedMetric == .calories ? "kcal" : "")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .lineLimit(1)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    ZStack {
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: currentValue.colors.map { $0.opacity(0.4) },
-                                    center: .center,
-                                    startRadius: 20,
-                                    endRadius: 50
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                            .blur(radius: 20)
-                            .opacity(pulse ? 0.8 : 0.6)
-                            .scaleEffect(pulse ? 1.1 : 1.0)
-                        
-                        Image(systemName: currentValue.icon)
-                            .font(.system(size: 42, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: currentValue.colors,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .symbolEffect(.pulse, value: pulse)
-                    }
-                }
-                
-                // Circular Progress Ring
-                ZStack {
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                        )
-                        .frame(width: 140, height: 140)
-                    
-                    Circle()
-                        .trim(from: 0, to: currentValue.progress)
-                        .stroke(
-                            AngularGradient(
-                                gradient: Gradient(colors: currentValue.colors + [currentValue.colors[0]]),
-                                center: .center,
-                                startAngle: .degrees(-90),
-                                endAngle: .degrees(270)
-                            ),
-                            style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 140, height: 140)
-                        .animation(.spring(response: 0.8), value: currentValue.progress)
-                    
-                    VStack(spacing: 4) {
-                        Text("\(Int(currentValue.progress * 100))%")
-                            .font(.title.weight(.bold))
-                            .foregroundStyle(.white)
-                        Text("of goal")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-            }
-            .padding(28)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-    }
-    
-    private func formatNumber(_ number: Int) -> String {
-        if number >= 10000 {
-            return String(format: "%.1fk", Double(number) / 1000.0)
-        }
-        return "\(number)"
-    }
-}
-
-struct MetricTypeSelector: View {
-    @Binding var selectedMetric: SophisticatedActivityView.ActivityMetricType
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                MetricButton(
-                    icon: "figure.walk",
-                    title: "Steps",
-                    isSelected: selectedMetric == .steps,
-                    colors: [.cyan, .blue],
-                    action: { selectedMetric = .steps }
-                )
-                
-                MetricButton(
-                    icon: "map.fill",
-                    title: "Distance",
-                    isSelected: selectedMetric == .distance,
-                    colors: [.blue, .indigo],
-                    action: { selectedMetric = .distance }
-                )
-                
-                MetricButton(
-                    icon: "flame.fill",
-                    title: "Calories",
-                    isSelected: selectedMetric == .calories,
-                    colors: [.orange, .red],
-                    action: { selectedMetric = .calories }
-                )
-                
-                MetricButton(
-                    icon: "heart.fill",
-                    title: "Heart",
-                    isSelected: selectedMetric == .heartRate,
-                    colors: [.red, .pink],
-                    action: { selectedMetric = .heartRate }
-                )
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-}
-
-struct MetricButton: View {
-    let icon: String
-    let title: String
-    let isSelected: Bool
-    let colors: [Color]
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-            }
-            .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(
-                Group {
-                    if isSelected {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: colors.map { $0.opacity(0.6) },
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .shadow(color: colors[0].opacity(0.4), radius: 8, y: 4)
-                    } else {
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                    }
-                }
-            )
-            .overlay(
-                Capsule()
-                    .stroke(
-                        isSelected ? LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing) : LinearGradient(colors: [.white.opacity(0.2), .white.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: isSelected ? 2 : 1
-                    )
-            )
-        }
-    }
-}
-
-struct MajesticActivityCard: View {
-    let title: String
-    let value: Int
-    let formattedValue: String
-    let subtitle: String
-    let icon: String
-    let colors: [Color]
-    let progress: Double
-    let secondaryInfo: String
-    @State private var animatedProgress: Double = 0
-    @State private var hover = false
-    
-    var body: some View {
-        GlassCard(expand: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: colors.map { $0.opacity(0.7) },
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 52, height: 52)
-                            .shadow(color: colors[0].opacity(0.4), radius: 12, y: 4)
-                            .scaleEffect(hover ? 1.05 : 1.0)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                    }
-                    
-                    Spacer()
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(formattedValue)
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: colors,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.4)
-                        .fixedSize(horizontal: false, vertical: true)
-                
-                Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    
-                    Text(subtitle)
-                    .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                    
-                    Text(secondaryInfo)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(colors[0].opacity(0.9))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(colors[0].opacity(0.15))
-                        )
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                
-                // Enhanced Progress Ring
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 6)
-                        .frame(width: 60, height: 60)
-                    
-                    Circle()
-                        .trim(from: 0, to: animatedProgress)
-                        .stroke(
-                            AngularGradient(
-                                gradient: Gradient(colors: colors),
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 60, height: 60)
-                        .animation(.spring(response: 0.8), value: animatedProgress)
-                }
-            }
-            .padding(20)
-        }
-        .scaleEffect(hover ? 1.02 : 1.0)
-        .onAppear {
-            withAnimation(.spring(response: 0.8).delay(0.2)) {
-                animatedProgress = progress
-            }
-        }
-        .onTapGesture {
-            withAnimation(.spring()) {
-                hover.toggle()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    hover = false
-                }
-            }
-        }
-    }
-}
-
-struct ActivityInsightsCard: View {
-    @ObservedObject var healthManager: HealthKitManager
-    
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Image(systemName: "sparkles")
-                        .font(.title3)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text("Activity Insights")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                    
-                    Spacer()
-                }
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    InsightRow(
-                        icon: "arrow.up.right",
-                        text: calculateActivityTrend(),
-                        color: .green
-                    )
-                    
-                    InsightRow(
-                        icon: "target",
-                        text: calculateGoalStatus(),
-                        color: .blue
-                    )
-                    
-                    if healthManager.healthData.weeklySteps.count > 1 {
-                        InsightRow(
-                            icon: "chart.line.uptrend.xyaxis",
-                            text: "Weekly average: \(formatSteps(weeklyAverage)) steps",
-                            color: .purple
-                        )
-                    }
-                }
-            }
-            .padding(20)
-        }
-    }
-    
-    private var weeklyAverage: Int {
-        let values = healthManager.healthData.weeklySteps.values
-        guard !values.isEmpty else { return 0 }
-        return values.reduce(0, +) / values.count
-    }
-    
-    private func formatSteps(_ steps: Int) -> String {
-        if steps >= 1000 {
-            return String(format: "%.1fk", Double(steps) / 1000.0)
-        }
-        return "\(steps)"
-    }
-    
-    private func calculateActivityTrend() -> String {
-        let today = healthManager.healthData.steps
-        let avg = weeklyAverage
-        if today > avg {
-            let diff = Int((Double(today - avg) / Double(max(avg, 1))) * 100)
-            return "\(diff)% above weekly average"
-        } else if today < avg {
-            let diff = Int((Double(avg - today) / Double(max(avg, 1))) * 100)
-            return "\(diff)% below weekly average"
-        }
-        return "On track with weekly average"
-    }
-    
-    private func calculateGoalStatus() -> String {
-        let progress = healthManager.healthData.stepsProgress
-        if progress >= 1.0 {
-            return "Goal achieved! 🎉"
-        } else if progress >= 0.75 {
-            return "\(Int((1.0 - progress) * 100))% away from goal"
-        } else {
-            return "Keep going! \(Int(progress * 100))% complete"
-        }
-    }
-}
-
-struct InsightRow: View {
-    let icon: String
-    let text: String
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.2))
-                    .frame(width: 32, height: 32)
-                
-                Image(systemName: icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(color)
-            }
-            
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.9))
-            
-            Spacer()
-        }
-    }
-}
-
-struct EnhancedWeeklyStepsChart: View {
-    let weeklySteps: [Date: Int]
-    @State private var animate = false
-    @State private var selectedIndex: Int?
-    
-    var sortedData: [(Date, Int)] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        return (0..<7).compactMap { offset in
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
-            return (date, weeklySteps[date] ?? 0)
-        }.reversed()
-    }
-    
-    var maxSteps: Int {
-        sortedData.map { $0.1 }.max() ?? 10000
-    }
-    
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                Text("Weekly Activity")
-                            .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                
-                        if let max = sortedData.map({ $0.1 }).max(), max > 0 {
-                            Text("\(formatNumber(max)) steps max")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.cyan, .blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 8, height: 8)
-                        Text("7 Days")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-                
-                ZStack(alignment: .topLeading) {
-                    // Chart bars
-                GeometryReader { geo in
-                    HStack(alignment: .bottom, spacing: 8) {
-                        ForEach(Array(sortedData.enumerated()), id: \.offset) { index, data in
-                                VStack(spacing: 10) {
-                                    ZStack(alignment: .top) {
-                                        // Bar
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                                    colors: selectedIndex == index 
-                                                        ? [.cyan.opacity(1.0), .blue.opacity(1.0)]
-                                                        : [.cyan.opacity(0.9), .blue.opacity(0.9)],
-                                            startPoint: .bottom,
-                                            endPoint: .top
-                                        )
-                                    )
-                                    .frame(
-                                                width: (geo.size.width - 48) / 7,
-                                                height: max(20, geo.size.height * CGFloat(min(1.0, Double(data.1) / Double(max(maxSteps, 10000)))) * (animate ? 1.0 : 0))
-                                            )
-                                            .shadow(
-                                                color: selectedIndex == index 
-                                                    ? .cyan.opacity(0.6) 
-                                                    : .cyan.opacity(0.4),
-                                                radius: selectedIndex == index ? 8 : 4,
-                                                y: selectedIndex == index ? 4 : 2
-                                            )
-                                            .scaleEffect(selectedIndex == index ? 1.05 : 1.0)
-                                            .animation(.spring(response: 0.3), value: selectedIndex)
-                                        
-                                        // Value label above bar - properly positioned to prevent cutoff
-                                        if animate && data.1 > 0 {
-                                            Text(formatNumber(data.1))
-                                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                                .foregroundStyle(.white)
-                                                .padding(.horizontal, 4)
-                                                .padding(.vertical, 2)
-                                                .background(
-                                                    Capsule()
-                                                        .fill(Color.black.opacity(0.6))
-                                                        .overlay(
-                                                            Capsule()
-                                                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                                        )
-                                                )
-                                                .offset(y: -24)
-                                                .lineLimit(1)
-                                                .fixedSize(horizontal: true, vertical: false)
-                                                .opacity(animate ? 1.0 : 0.0)
-                                        }
-                                    }
-                                    
-                                    // Day label
-                                Text(dayLabel(data.0))
-                                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                                        .foregroundStyle(selectedIndex == index ? .white : .white.opacity(0.75))
-                                        .lineLimit(1)
-                                }
-                                .frame(width: (geo.size.width - 48) / 7)
-                                .onTapGesture {
-                                    withAnimation(.spring()) {
-                                        selectedIndex = selectedIndex == index ? nil : index
-                                    }
-                                    Hx.tap()
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(height: 200)
-                }
-                
-                // Summary stats
-                HStack(spacing: 20) {
-                    StatSummary(
-                        label: "Total",
-                        value: formatNumber(sortedData.reduce(0) { $0 + $1.1 }),
-                        icon: "figure.walk"
-                    )
-                    StatSummary(
-                        label: "Avg/Day",
-                        value: formatNumber(sortedData.isEmpty ? 0 : sortedData.reduce(0) { $0 + $1.1 } / sortedData.count),
-                        icon: "chart.bar"
-                    )
-                    StatSummary(
-                        label: "Trend",
-                        value: calculateTrend(),
-                        icon: "arrow.up.right"
-                    )
-                }
-            }
-            .padding(20)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6).delay(0.2)) {
-                animate = true
-            }
-        }
-    }
-    
-    private func dayLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        if Calendar.current.isDateInToday(date) {
-            return "Today"
-        }
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date).uppercased()
-    }
-    
-    private func formatNumber(_ number: Int) -> String {
-        if number >= 1000 {
-            let k = Double(number) / 1000.0
-            return String(format: "%.1fk", k)
-        }
-        return "\(number)"
-    }
-    
-    private func calculateTrend() -> String {
-        guard sortedData.count >= 2 else { return "--" }
-        let recent = Array(sortedData.suffix(3)).map { $0.1 }.reduce(0, +)
-        let earlier = Array(sortedData.prefix(3)).map { $0.1 }.reduce(0, +)
-        
-        if recent > earlier {
-            let percent = Int((Double(recent - earlier) / Double(max(earlier, 1))) * 100)
-            return "+\(percent)%"
-        } else if recent < earlier {
-            let percent = Int((Double(earlier - recent) / Double(max(earlier, 1))) * 100)
-            return "-\(percent)%"
-        }
-        return "→"
-    }
-}
-
-struct StatSummary: View {
-    let label: String
-    let value: String
-    let icon: String
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
-            
-            Text(value)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -2151,7 +1866,7 @@ struct QuickHealthStatsBar: View {
             HStack(spacing: 12) {
                 QuickStatPill(
                     icon: "figure.walk",
-                    value: "\(formatLargeNumber(healthManager.healthData.steps))",
+                    value: formatLargeNumber(healthManager.healthData.steps),
                     label: "Steps",
                     color: .cyan,
                     progress: healthManager.healthData.stepsProgress
@@ -2211,45 +1926,116 @@ struct QuickStatPill: View {
     let label: String
     let color: Color
     let progress: Double
+    @State private var animateProgress = false
+    @State private var pulse = false
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             ZStack {
+                // Enhanced glow effect
                 Circle()
-                    .fill(color.opacity(0.3))
-                    .frame(width: 32, height: 32)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                color.opacity(0.5),
+                                color.opacity(0.2),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 5,
+                            endRadius: 20
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .blur(radius: 4)
+                    .opacity(pulse ? 0.8 : 0.5)
+                
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [color.opacity(0.4), color.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Circle()
+                            .stroke(color.opacity(0.5), lineWidth: 1.5)
+                    )
+                    .shadow(color: color.opacity(0.4), radius: 4, y: 2)
                 
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(color)
+                    .symbolEffect(.pulse, value: pulse)
             }
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.white, .white.opacity(0.95)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
                 
                 Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
             }
             
-            // Mini progress indicator
-            GeometryReader { geo in
+            // Enhanced mini progress indicator
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.15))
-                        .frame(height: 3)
-                    
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(color)
-                        .frame(width: geo.size.width * CGFloat(progress), height: 3)
-                }
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.2),
+                                Color.white.opacity(0.15)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 45, height: 4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                    )
+                
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(
+                        LinearGradient(
+                            colors: [color, color.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: animateProgress ? 45 * CGFloat(min(1.0, progress)) : 0, height: 4)
+                    .shadow(color: color.opacity(0.5), radius: 2, x: 0, y: 1)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.3), .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    )
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7), value: animateProgress)
             }
-            .frame(width: 40, height: 3)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(
             Capsule()
                 .fill(Color.white.opacity(0.1))
@@ -2261,1509 +2047,1310 @@ struct QuickStatPill: View {
     }
 }
 
-// MARK: - Majestic Nutrition View
+// MARK: - Water Quick Add Sheet
 
-struct SophisticatedNutritionView: View {
-    @ObservedObject var foodTracker: FoodTrackerManager
-    @ObservedObject var waterTracker: WaterTrackerManager
-    @State private var showFoodTracker = false
-    @State private var animate = false
-    @State private var selectedView: NutritionViewType = .overview
-    
-    enum NutritionViewType {
-        case overview, calories, water, meals
-    }
+struct WaterQuickAddSheet: View {
+    @ObservedObject var tracker: WaterTrackerManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedAmount: Double = 8.0
     
     var body: some View {
-        VStack(spacing: 28) {
-            // Hero Nutrition Card - Majestic Design
-            MajesticNutritionHeroCard(
-                foodTracker: foodTracker,
-                waterTracker: waterTracker
-            )
-            
-            // Nutrition View Selector
-            NutritionViewSelector(selectedView: $selectedView)
-            
-            // Content based on selection
-            switch selectedView {
-            case .overview:
-                NutritionOverviewContent(
-                    foodTracker: foodTracker,
-                    waterTracker: waterTracker,
-                    showFoodTracker: $showFoodTracker
-                )
-            case .calories:
-                MajesticCaloriesView(foodTracker: foodTracker)
-            case .water:
-                MajesticWaterView(tracker: waterTracker)
-            case .meals:
-                MajesticMealsView(
-                    foodTracker: foodTracker,
-                    showFoodTracker: $showFoodTracker
-                )
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6).delay(0.1)) {
-                animate = true
-            }
-        }
-        .sheet(isPresented: $showFoodTracker) {
             NavigationStack {
-            FoodTrackerView()
-            }
-        }
-    }
-}
-
-// MARK: - Majestic Nutrition Components
-
-struct MajesticNutritionHeroCard: View {
-    @ObservedObject var foodTracker: FoodTrackerManager
-    @ObservedObject var waterTracker: WaterTrackerManager
-    @State private var pulse = false
-    
-    var totalCalories: Int {
-        foodTracker.todaysCalories
-    }
-    
-    var progress: Double {
-        min(1.0, Double(totalCalories) / 2000.0)
-    }
-    
-    var body: some View {
+            ZStack {
+                AnimatedBrandBackground().ignoresSafeArea()
+                
+                VStack(spacing: 24) {
         GlassCard {
-            VStack(spacing: 28) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Nutrition Today")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                        
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("\(totalCalories)")
-                                .font(.system(size: 64, weight: .bold, design: .rounded))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.green, .mint, .cyan],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .contentTransition(.numericText())
+                        VStack(spacing: 20) {
+                            Text("Add Water")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(.white)
                             
-                            Text("kcal")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        
-                        Text("Goal: 2,000 kcal")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.75))
-                    }
-                    
-                    Spacer()
-                    
-                    ZStack {
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [.green.opacity(0.4), .mint.opacity(0.3), .cyan.opacity(0.2)],
-                                    center: .center,
-                                    startRadius: 20,
-                                    endRadius: 60
-                                )
-                            )
-                            .frame(width: 120, height: 120)
-                            .blur(radius: 25)
-                            .opacity(pulse ? 0.8 : 0.6)
-                            .scaleEffect(pulse ? 1.1 : 1.0)
-                        
-                        Image(systemName: "fork.knife.circle.fill")
-                            .font(.system(size: 52, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.green, .mint, .cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .symbolEffect(.pulse, value: pulse)
-                    }
-                }
-                
-                // Majestic Progress Ring
-                ZStack {
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.12), Color.white.opacity(0.05)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 16, lineCap: .round)
-                        )
-                        .frame(width: 160, height: 160)
-                    
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(
-                            AngularGradient(
-                                gradient: Gradient(colors: [.green, .mint, .cyan, .blue, .green]),
-                                center: .center,
-                                startAngle: .degrees(-90),
-                                endAngle: .degrees(270)
-                            ),
-                            style: StrokeStyle(lineWidth: 16, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 160, height: 160)
-                        .animation(.spring(response: 0.8), value: progress)
-                    
-                    VStack(spacing: 6) {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Text("of daily goal")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
-                        
-                        Text("\(2000 - totalCalories) remaining")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-            }
-            .padding(32)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-    }
-}
-
-struct NutritionViewSelector: View {
-    @Binding var selectedView: SophisticatedNutritionView.NutritionViewType
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                NutritionButton(
-                    icon: "square.grid.2x2",
-                    title: "Overview",
-                    isSelected: selectedView == .overview,
-                    colors: [.purple, .blue],
-                    action: { selectedView = .overview }
-                )
-                
-                NutritionButton(
-                    icon: "flame.fill",
-                    title: "Calories",
-                    isSelected: selectedView == .calories,
-                    colors: [.orange, .red],
-                    action: { selectedView = .calories }
-                )
-                
-                NutritionButton(
-                    icon: "drop.fill",
-                    title: "Water",
-                    isSelected: selectedView == .water,
-                    colors: [.blue, .cyan],
-                    action: { selectedView = .water }
-                )
-                
-                NutritionButton(
-                    icon: "fork.knife",
-                    title: "Meals",
-                    isSelected: selectedView == .meals,
-                    colors: [.green, .mint],
-                    action: { selectedView = .meals }
-                )
-            }
-            .padding(.horizontal, 4)
-        }
-    }
-}
-
-struct NutritionButton: View {
-    let icon: String
-    let title: String
-    let isSelected: Bool
-    let colors: [Color]
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-            }
-            .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(
-                Group {
-                    if isSelected {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: colors.map { $0.opacity(0.6) },
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .shadow(color: colors[0].opacity(0.4), radius: 8, y: 4)
-                    } else {
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                    }
-                }
-            )
-            .overlay(
-                Capsule()
-                    .stroke(
-                        isSelected ? LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing) : LinearGradient(colors: [.white.opacity(0.2), .white.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: isSelected ? 2 : 1
-                    )
-            )
-        }
-    }
-}
-
-struct NutritionOverviewContent: View {
-    @ObservedObject var foodTracker: FoodTrackerManager
-    @ObservedObject var waterTracker: WaterTrackerManager
-    @Binding var showFoodTracker: Bool
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            // Quick Stats Grid
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 16),
-                GridItem(.flexible(), spacing: 16)
-            ], spacing: 20) {
-                MajesticNutritionCard(
-                    title: "Calories",
-                    value: foodTracker.todaysCalories,
-                    goal: 2000,
-                    icon: "flame.fill",
-                    colors: [.orange, .red],
-                    unit: "kcal"
-                )
-                
-                MajesticNutritionCard(
-                    title: "Water",
-                    value: Int(waterTracker.todaysIntake),
-                    goal: Int(waterTracker.goal),
-                    icon: "drop.fill",
-                    colors: [.blue, .cyan],
-                    unit: "oz"
-                )
-            }
-            
-            // Meals Section
-            if !foodTracker.meals.isEmpty {
-                MajesticMealsSection(
-                    meals: foodTracker.meals,
-                    showFoodTracker: $showFoodTracker,
-                    onDelete: { meal in
-                        foodTracker.deleteMeal(meal)
-                    }
-                )
-            } else {
-                EmptyMealsCard(showFoodTracker: $showFoodTracker)
-            }
-        }
-    }
-}
-
-struct MajesticNutritionCard: View {
-    let title: String
-    let value: Int
-    let goal: Int
-    let icon: String
-    let colors: [Color]
-    let unit: String
-    @State private var animatedProgress: Double = 0
-    
-    var progress: Double {
-        min(1.0, Double(value) / Double(goal))
-    }
-    
-    var body: some View {
-        GlassCard(expand: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: colors.map { $0.opacity(0.7) },
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 56, height: 56)
-                            .shadow(color: colors[0].opacity(0.4), radius: 12, y: 4)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    
-                    Spacer()
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("\(value)")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: colors,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text(title)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
-                    
-                    Text("\(value) / \(goal) \(unit)")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                
-                // Circular Progress
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 8)
-                        .frame(width: 70, height: 70)
-                    
-                    Circle()
-                        .trim(from: 0, to: animatedProgress)
-                        .stroke(
-                            AngularGradient(
-                                gradient: Gradient(colors: colors),
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 70, height: 70)
-                        .animation(.spring(response: 0.8), value: animatedProgress)
-                }
-            }
-            .padding(22)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.8).delay(0.2)) {
-                animatedProgress = progress
-            }
-        }
-    }
-}
-
-struct MajesticCaloriesView: View {
-    @ObservedObject var foodTracker: FoodTrackerManager
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            EnhancedCaloriesCard(
-                consumed: foodTracker.todaysCalories,
-                burned: 0,
-                goal: 2000
-            )
-            
-            // Calorie breakdown by meal type
-            CalorieBreakdownCard(foodTracker: foodTracker)
-        }
-    }
-}
-
-struct CalorieBreakdownCard: View {
-    @ObservedObject var foodTracker: FoodTrackerManager
-    
-    var mealBreakdown: [(type: String, calories: Int, icon: String, color: Color)] {
-        var breakdown: [String: Int] = [:]
-        for meal in foodTracker.meals {
-            breakdown[meal.mealType.rawValue, default: 0] += meal.calories
-        }
-        
-        return breakdown.map { key, value in
-            let type = FoodEntry.MealType(rawValue: key) ?? .snack
-            return (key, value, type.icon, type.color)
-        }.sorted { $0.calories > $1.calories }
-    }
-    
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Image(systemName: "chart.pie.fill")
-                        .font(.title3)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.purple, .pink],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text("Calorie Breakdown")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                    
-                    Spacer()
-                }
-                
-                if !mealBreakdown.isEmpty {
-                    ForEach(Array(mealBreakdown.enumerated()), id: \.offset) { _, item in
-                        CalorieBreakdownRow(
-                            mealType: item.type,
-                            calories: item.calories,
-                            icon: item.icon,
-                            color: item.color,
-                            total: foodTracker.todaysCalories
-                        )
-                    }
-                } else {
-                    Text("No meals logged yet")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                }
-            }
-            .padding(22)
-        }
-    }
-}
-
-struct CalorieBreakdownRow: View {
-    let mealType: String
-    let calories: Int
-    let icon: String
-    let color: Color
-    let total: Int
-    
-    var percentage: Double {
-        total > 0 ? Double(calories) / Double(total) : 0
-    }
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(color.opacity(0.3))
-                            .frame(width: 40, height: 40)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(color)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(mealType)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        
-                        Text("\(calories) kcal")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-                
-                Spacer()
-                
-                Text("\(Int(percentage * 100))%")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-            }
-            
-            // Progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 8)
-                    
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.7)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * CGFloat(percentage), height: 8)
-                }
-            }
-            .frame(height: 8)
-        }
-    }
-}
-
-// MARK: - Water View
-
-struct MajesticWaterView: View {
-    @ObservedObject var tracker: WaterTrackerManager
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            EnhancedWaterCard(tracker: tracker)
-            
-            // Water intake history
-            WaterHistoryCard(tracker: tracker)
-        }
-    }
-}
-
-struct WaterHistoryCard: View {
-    @ObservedObject var tracker: WaterTrackerManager
-    
-    var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Image(systemName: "chart.bar.fill")
-                        .font(.title3)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.blue, .cyan],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text("Today's Progress")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                    
-                    Spacer()
-                }
-                
-                VStack(spacing: 16) {
-                    WaterProgressRow(
-                        time: "Morning",
-                        amount: tracker.todaysIntake * 0.4,
-                        color: .blue
-                    )
-                    
-                    WaterProgressRow(
-                        time: "Afternoon",
-                        amount: tracker.todaysIntake * 0.35,
-                        color: .cyan
-                    )
-                    
-                    WaterProgressRow(
-                        time: "Evening",
-                        amount: tracker.todaysIntake * 0.25,
-                        color: .indigo
-                    )
-                }
-            }
-            .padding(22)
-        }
-    }
-}
-
-struct WaterProgressRow: View {
-    let time: String
-    let amount: Double
-    let color: Color
-    
-    var body: some View {
-        HStack {
-            Text(time)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 80, alignment: .leading)
-            
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 16)
-                    
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(
-                            LinearGradient(
-                                colors: [color, color.opacity(0.7)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * CGFloat(min(1.0, amount / 20.0)), height: 16)
-                }
-            }
-            .frame(height: 16)
-            
-            Text(String(format: "%.0f oz", amount))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .frame(width: 50, alignment: .trailing)
-        }
-    }
-}
-
-struct MajesticMealsView: View {
-    @ObservedObject var foodTracker: FoodTrackerManager
-    @Binding var showFoodTracker: Bool
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            if !foodTracker.meals.isEmpty {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack {
-                    Text("Today's Meals")
-                            .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                        
-                        Spacer()
-                        
-                        Button {
-                            showFoodTracker = true
-                            Hx.tap()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Add Meal")
-                                    .fontWeight(.semibold)
-                            }
-                            .font(.subheadline)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [.green.opacity(0.6), .mint.opacity(0.6)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
-                                    )
-                            )
-                        }
-                    }
-                    
-                    ForEach(foodTracker.meals) { meal in
-                        MajesticMealCard(meal: meal) {
-                            foodTracker.deleteMeal(meal)
-                        }
-                    }
-                }
-            } else {
-                EmptyMealsCard(showFoodTracker: $showFoodTracker)
-            }
-        }
-    }
-}
-
-struct MajesticMealCard: View {
-    let meal: FoodEntry
-    let onDelete: () -> Void
-    @State private var showDeleteAlert = false
-    @State private var hover = false
-    
-    var body: some View {
-        GlassCard(expand: false) {
-            HStack(spacing: 18) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [meal.mealType.color.opacity(0.7), meal.mealType.color.opacity(0.5)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 60, height: 60)
-                        .shadow(color: meal.mealType.color.opacity(0.4), radius: 10, y: 4)
-                        .scaleEffect(hover ? 1.05 : 1.0)
-                    
-                    Image(systemName: meal.mealType.icon)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(meal.name)
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                    
-                    HStack(spacing: 16) {
-                        Label(meal.mealType.rawValue, systemImage: "clock.fill")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                        
-                        Text(formatTime(meal.timestamp))
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text("\(meal.calories)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [meal.mealType.color, meal.mealType.color.opacity(0.8)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    Text("kcal")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                
-                Button {
-                    showDeleteAlert = true
-                    Hx.warn()
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.6))
-                        .padding(8)
-                }
-            }
-            .padding(20)
-        }
-        .scaleEffect(hover ? 1.01 : 1.0)
-        .onTapGesture {
-            withAnimation(.spring()) {
-                hover.toggle()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    hover = false
-                }
-            }
-        }
-        .alert("Delete Meal?", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                onDelete()
-                Hx.ok()
-            }
-        } message: {
-            Text("This will permanently delete this meal entry.")
-        }
-    }
-    
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-}
-
-struct MajesticMealsSection: View {
-    let meals: [FoodEntry]
-    @Binding var showFoodTracker: Bool
-    let onDelete: (FoodEntry) -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Image(systemName: "fork.knife.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.green, .mint],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                
-                Text("Recent Meals")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                
-                Spacer()
-                
-                Button {
-                    showFoodTracker = true
-                    Hx.tap()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add")
-                            .fontWeight(.semibold)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.green.opacity(0.6), .mint.opacity(0.6)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
-                            )
-                    )
-                }
-            }
-            
-            ForEach(meals.prefix(5)) { meal in
-                MajesticMealCard(meal: meal) {
-                    onDelete(meal)
-                }
-            }
-        }
-    }
-}
-
-struct EnhancedCaloriesCard: View {
-    let consumed: Int
-    let burned: Int
-    let goal: Int
-    @State private var animate = false
-    
-    var net: Int {
-        consumed - burned
-    }
-    
-    var progress: Double {
-        min(1.0, Double(consumed) / Double(goal))
-    }
-    
-    var body: some View {
-        GlassCard {
-            VStack(spacing: 28) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Daily Calories")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("\(consumed)")
+                            Text("\(Int(selectedAmount)) oz")
                                 .font(.system(size: 48, weight: .bold, design: .rounded))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.green, .mint],
+                                        colors: [.blue, .cyan],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
                             
-                            Text("/ \(goal)")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.7))
+                            VStack(spacing: 16) {
+                                HStack(spacing: 12) {
+                                    ForEach([8.0, 12.0, 16.0, 20.0], id: \.self) { amount in
+                                        Button {
+                                            selectedAmount = amount
+                                            Hx.tap()
+                                        } label: {
+                                            Text("\(Int(amount))")
+                                                .font(.headline.weight(.semibold))
+                                                .foregroundStyle(selectedAmount == amount ? .white : .white.opacity(0.7))
+                                                .frame(width: 60, height: 50)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(selectedAmount == amount ? Color.blue.opacity(0.5) : Color.white.opacity(0.1))
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                
+                                Slider(value: $selectedAmount, in: 4...32, step: 4)
+                                    .tint(.blue)
+                            }
                         }
+                        .padding(24)
                     }
+                    .padding(.horizontal, 22)
                     
                     Spacer()
                     
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.orange, .red],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-                
-                // Majestic Progress Ring
-                ZStack {
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.15), Color.white.opacity(0.08)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 16, lineCap: .round)
-                        )
-                        .frame(width: 150, height: 150)
-                    
-                    Circle()
-                        .trim(from: 0, to: animate ? progress : 0)
-                        .stroke(
-                            AngularGradient(
-                                gradient: Gradient(colors: [.green, .mint, .cyan, .blue, .green]),
-                                center: .center,
-                                startAngle: .degrees(-90),
-                                endAngle: .degrees(270)
-                            ),
-                            style: StrokeStyle(lineWidth: 16, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 150, height: 150)
-                        .animation(.spring(response: 0.8), value: animate)
-                    
-                    VStack(spacing: 6) {
-                    Text("\(Int(progress * 100))%")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                    Button {
+                        tracker.addWater(ounces: selectedAmount)
+                        Hx.ok()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Add \(Int(selectedAmount)) oz")
+                                .fontWeight(.semibold)
+                        }
                         .foregroundStyle(.white)
-                        Text("of goal")
-                            .font(.subheadline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.9), .cyan.opacity(0.9)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(cornerRadius: 16)
+                        )
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle("Add Water")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 }
-                
-                HStack(spacing: 32) {
-                    CalorieStatBox(
-                        value: "\(consumed)",
-                        label: "Consumed",
-                        color: .green
-                    )
-                    
-                    CalorieStatBox(
-                        value: "\(net)",
-                        label: "Net",
-                        color: .blue
-                    )
-                    
-                    CalorieStatBox(
-                        value: "\(goal - consumed)",
-                        label: "Remaining",
-                        color: .purple
-                    )
-                }
-            }
-            .padding(28)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.8).delay(0.2)) {
-                animate = true
             }
         }
     }
 }
 
-struct CalorieStatBox: View {
-    let value: String
-    let label: String
-    let color: Color
+// MARK: - Health Settings View
+
+struct HealthSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var healthManager: HealthKitManager
     
     var body: some View {
-        VStack(spacing: 6) {
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(color)
-            
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
+        NavigationStack {
+            ZStack {
+                AnimatedBrandBackground().ignoresSafeArea()
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        GlassCard {
+                            VStack(alignment: .leading, spacing: 20) {
+                                Text("Health Settings")
+                                    .font(.title2.weight(.bold))
+                                    .foregroundStyle(.white)
+                                
+                                if healthManager.isAuthorized {
+                                    HStack {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                        Text("Apple Health Connected")
+                                            .foregroundStyle(.white)
+                                    }
+                                } else {
+                                    Button {
+                                        Task {
+                                            await healthManager.requestAuthorization()
+                                            healthManager.checkAuthorizationStatus()
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "link.circle.fill")
+                                            Text("Connect Apple Health")
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color.green.opacity(0.3))
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(24)
+                        }
+                        .padding(.horizontal, 22)
+                    }
+                    .padding(.vertical, 20)
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(color.opacity(0.3), lineWidth: 1.5)
-                )
-        )
     }
 }
 
-struct EnhancedWaterCard: View {
-    @ObservedObject var tracker: WaterTrackerManager
-    @State private var animate = false
+// MARK: - Comprehensive Health Score Card
+
+struct ComprehensiveHealthScoreCard: View {
+    @ObservedObject var healthManager: HealthKitManager
+    @Binding var animateScore: Bool
+    @State private var pulse = false
+    @State private var glow = false
     
     var body: some View {
         GlassCard {
             VStack(spacing: 20) {
                 HStack {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Water Intake")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Text(String(format: "%.1f / %.0f oz", tracker.todaysIntake, tracker.goal))
+                        Text("Your Health Score")
                             .font(.title2.weight(.bold))
-                            .foregroundStyle(.white)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                    colors: [.white, .white.opacity(0.9)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                        
+                        Text(formattedDate)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.85))
                     }
                     
                     Spacer()
                     
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.blue, .cyan],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-                
-                // Enhanced progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .bottom) {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.white.opacity(0.15))
-                            .frame(height: 44)
-                        
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(
+                    // Enhanced Animated Health Score Circle with glow
+                    ZStack {
+                        // Outer glow ring
+                        Circle()
+                            .stroke(
                                 LinearGradient(
-                                    colors: [.blue, .cyan],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                                    colors: scoreColors.map { $0.opacity(0.3) },
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
                             )
-                            .frame(
-                                width: geo.size.width * CGFloat(animate ? tracker.progress : 0),
-                                height: 44
-                            )
-                            .animation(.spring(response: 0.6), value: animate)
+                            .frame(width: 120, height: 120)
+                            .opacity(glow ? 0.8 : 0.4)
                         
-                        Text("\(Int(tracker.progress * 100))%")
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .frame(height: 44)
-                
-                // Quick add buttons
-                HStack(spacing: 12) {
-                    ForEach([8.0, 16.0, 24.0], id: \.self) { amount in
-                        Button {
-                            tracker.addWater(ounces: amount)
-                            Hx.ok()
-                            withAnimation(.spring()) {
-                                animate.toggle()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    animate.toggle()
-                                }
-                            }
-                        } label: {
-                            Text("\(Int(amount))oz")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.blue.opacity(0.3))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(Color.white.opacity(0.3), lineWidth: 1.5)
-                                        )
-                                )
-                        }
-                    }
-                }
-            }
-            .padding(22)
-        }
-        .onAppear {
-            withAnimation {
-                animate = true
-            }
-        }
-    }
-}
-
-struct EnhancedMealCard: View {
-    let meal: FoodEntry
-    let onDelete: () -> Void
-    @State private var showDeleteAlert = false
-    
-    var body: some View {
-        GlassCard(expand: false) {
-            HStack(spacing: 16) {
-                ZStack {
+                        // Background circle
                     Circle()
-                        .fill(
+                        .stroke(
                             LinearGradient(
-                                colors: [.green.opacity(0.7), .mint.opacity(0.7)],
+                                    colors: [Color.white.opacity(0.2), Color.white.opacity(0.1)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            )
+                            ),
+                                lineWidth: 14
                         )
-                        .frame(width: 52, height: 52)
+                            .frame(width: 110, height: 110)
+                            .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
                     
-                    Image(systemName: meal.mealType.icon)
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                }
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(meal.name)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
-                    
-                    HStack(spacing: 12) {
-                    Text(meal.mealType.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                        
-                        Text(formatTime(meal.timestamp))
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(meal.calories)")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
-                    Text("kcal")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                
-                Button {
-                    showDeleteAlert = true
-                    Hx.warn()
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-            }
-            .padding(18)
-        }
-        .alert("Delete Meal?", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                onDelete()
-                Hx.ok()
-            }
-        } message: {
-            Text("This will permanently delete this meal entry.")
-        }
-    }
-    
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-}
-
-struct EmptyMealsCard: View {
-    @Binding var showFoodTracker: Bool
-    
-    var body: some View {
-        GlassCard {
-            VStack(spacing: 20) {
-                Image(systemName: "fork.knife")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white.opacity(0.7))
-                
-                Text("No meals logged today")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
-                
-                Text("Start tracking your nutrition by adding meals")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
-                
-                Button {
-                    showFoodTracker = true
-                    Hx.tap()
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Meal")
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [.green.opacity(0.9), .mint.opacity(0.9)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 16)
-                    )
-                    .shadow(color: .green.opacity(0.3), radius: 8, y: 4)
-                }
-            }
-            .padding(32)
-        }
-    }
-}
-
-// MARK: - Sophisticated Body View
-
-struct SophisticatedBodyView: View {
-    @ObservedObject var healthManager: HealthKitManager
-    @State private var showEditWeight = false
-    @State private var showEditHeight = false
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            if let bmi = healthManager.healthData.bmi {
-                EnhancedBMICard(
-                    bmi: bmi,
-                    weight: healthManager.healthData.weight,
-                    height: healthManager.healthData.height,
-                    onEditWeight: { showEditWeight = true },
-                    onEditHeight: { showEditHeight = true }
-                )
-            } else {
-                // No BMI data - prompt to add
-                GlassCard {
-                    VStack(spacing: 20) {
-                        Image(systemName: "person.fill.questionmark")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white.opacity(0.7))
-                        
-                        Text("No Body Metrics")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        
-                        Text("Add your weight and height in Apple Health to see your BMI and body metrics here.")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(32)
-                }
-            }
-            
-            // Body Metrics Grid
-            if healthManager.healthData.weight > 0 || healthManager.healthData.height > 0 {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 16),
-                    GridItem(.flexible(), spacing: 16)
-                ], spacing: 16) {
-                    if healthManager.healthData.weight > 0 {
-                        BodyMetricEditCard(
-                            label: "Weight",
-                            value: String(format: "%.1f", healthManager.healthData.weight),
-                            unit: "lbs",
-                            icon: "scalemass.fill",
-                            color: .blue,
-                            onEdit: { showEditWeight = true }
-                        )
-                    }
-                    
-                    if healthManager.healthData.height > 0 {
-                        BodyMetricEditCard(
-                            label: "Height",
-                            value: String(format: "%.1f", healthManager.healthData.height),
-                            unit: "in",
-                            icon: "ruler.fill",
-                            color: .purple,
-                            onEdit: { showEditHeight = true }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct EnhancedBMICard: View {
-    let bmi: Double
-    let weight: Double
-    let height: Double
-    let onEditWeight: () -> Void
-    let onEditHeight: () -> Void
-    @State private var animate = false
-    
-    var category: (String, Color) {
-        switch bmi {
-        case ..<18.5: return ("Underweight", .blue)
-        case 18.5..<25: return ("Normal", .green)
-        case 25..<30: return ("Overweight", .orange)
-        default: return ("Obese", .red)
-        }
-    }
-    
-    var body: some View {
-        GlassCard {
-            VStack(spacing: 24) {
-                HStack {
-                Text("Body Mass Index")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    
-                    Spacer()
-                    
-                    Text(category.0)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(category.1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(category.1.opacity(0.2))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(category.1.opacity(0.5), lineWidth: 1.5)
-                                )
-                        )
-                }
-                
-                ZStack {
+                        // Animated progress circle with glow
                     Circle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 18)
-                        .frame(width: 150, height: 150)
-                    
-                    Circle()
-                        .trim(from: 0, to: animate ? min(1.0, bmi / 40.0) : 0)
+                            .trim(from: 0, to: animateScore ? CGFloat(healthScore / 100.0) : 0)
                         .stroke(
                             AngularGradient(
-                                gradient: Gradient(colors: [category.1, category.1.opacity(0.6)]),
-                                center: .center
+                                    gradient: Gradient(colors: scoreColors + scoreColors),
+                                center: .center,
+                                    angle: .degrees(glow ? 360 : 0)
                             ),
-                            style: StrokeStyle(lineWidth: 18, lineCap: .round)
+                                style: StrokeStyle(lineWidth: 14, lineCap: .round)
                         )
                         .rotationEffect(.degrees(-90))
-                        .frame(width: 150, height: 150)
-                        .animation(.spring(response: 0.8), value: animate)
-                    
-                    VStack(spacing: 6) {
-                        Text(String(format: "%.1f", bmi))
-                            .font(.system(size: 42, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Text("BMI")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 110, height: 110)
+                            .shadow(color: scoreColors[0].opacity(0.6), radius: glow ? 12 : 8, x: 0, y: 4)
+                            .animation(.spring(response: 1.2, dampingFraction: 0.8), value: animateScore)
+                            .animation(.linear(duration: 3.0).repeatForever(autoreverses: false), value: glow)
+                        
+                        // Inner glow
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        scoreColors[0].opacity(0.4),
+                                        scoreColors[1].opacity(0.2),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 20,
+                                    endRadius: 50
+                                )
+                            )
+                            .frame(width: 110, height: 110)
+                            .opacity(pulse ? 0.8 : 0.5)
+                        
+                        // Score text with enhanced styling
+                        VStack(spacing: 4) {
+                            Text("\(Int(healthScore))")
+                                .font(.system(size: 40, weight: .bold, design: .rounded))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.white, .white.opacity(0.95)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                            Text("/100")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
                     }
                 }
                 
-                HStack(spacing: 24) {
-                    if weight > 0 {
-                        VStack(spacing: 4) {
-                            Text(String(format: "%.1f", weight))
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.white)
-                            Text("Weight (lbs)")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                            Button {
-                                onEditWeight()
-                                Hx.tap()
-                            } label: {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
-                            .padding(.top, 4)
-                        }
+                // Enhanced Breakdown
+                VStack(spacing: 12) {
+                    HealthScoreBreakdownRow(
+                        label: "Steps",
+                        score: min(100, Int(healthManager.healthData.stepsProgress * 100)),
+                        color: .cyan
+                    )
+                    HealthScoreBreakdownRow(
+                        label: "Sleep",
+                        score: min(100, Int(healthManager.healthData.sleepProgress * 100)),
+                        color: .indigo
+                    )
+                    HealthScoreBreakdownRow(
+                        label: "Exercise",
+                        score: min(100, Int(healthManager.healthData.exerciseProgress * 100)),
+                        color: .green
+                    )
+                    HealthScoreBreakdownRow(
+                        label: "Water",
+                        score: min(100, Int(healthManager.healthData.waterProgress * 100)),
+                        color: .blue
+                    )
+                    if healthManager.healthData.heartRate > 0 {
+                        HealthScoreBreakdownRow(
+                            label: "Heart Rate",
+                            score: healthManager.healthData.heartRate >= 60 && healthManager.healthData.heartRate <= 100 ? 100 : (healthManager.healthData.heartRate < 60 ? 80 : 70),
+                            color: .red
+                        )
                     }
-                    
-                    if height > 0 {
-                        VStack(spacing: 4) {
-                            Text(String(format: "%.1f", height))
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.white)
-                            Text("Height (in)")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                            Button {
-                                onEditHeight()
-                                Hx.tap()
-                            } label: {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
-                            .padding(.top, 4)
-                        }
+                    if healthManager.healthData.systolicBP > 0 {
+                        HealthScoreBreakdownRow(
+                            label: "Blood Pressure",
+                            score: healthManager.healthData.systolicBP < 120 && healthManager.healthData.diastolicBP < 80 ? 100 : (healthManager.healthData.systolicBP < 130 ? 80 : 60),
+                            color: .orange
+                        )
+                    }
+                    if healthManager.healthData.oxygenSaturation > 0 {
+                        HealthScoreBreakdownRow(
+                            label: "Oxygen",
+                            score: healthManager.healthData.oxygenSaturation >= 98 ? 100 : (healthManager.healthData.oxygenSaturation >= 95 ? 80 : 60),
+                            color: .cyan
+                        )
                     }
                 }
             }
             .padding(24)
         }
         .onAppear {
-            withAnimation(.spring().delay(0.2)) {
-                animate = true
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                glow = true
+            }
+        }
+        .onDisappear {
+            pulse = false
+            glow = false
+        }
+    }
+    
+    private var healthScore: Double {
+        healthManager.healthData.healthScore
+    }
+    
+    private var scoreColors: [Color] {
+        switch healthScore {
+        case 80...100:
+            return [.green, .mint, .cyan]
+        case 60..<80:
+            return [.yellow, .orange, .red.opacity(0.8)]
+        default:
+            return [.orange, .red, .pink]
+        }
+    }
+    
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        return formatter.string(from: Date())
+    }
+}
+
+struct HealthScoreBreakdownRow: View {
+    let label: String
+    let score: Int
+    let color: Color
+    @State private var animateProgress = false
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(width: 80, alignment: .leading)
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    // Enhanced background
+                    RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.2),
+                                    Color.white.opacity(0.1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: 8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                    
+                    // Animated progress bar with glow
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: [color, color.opacity(0.8)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        .frame(width: animateProgress ? geo.size.width * CGFloat(score) / 100.0 : 0, height: 8)
+                        .shadow(color: color.opacity(0.5), radius: 4, x: 0, y: 2)
+            .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.4), .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        )
+                        .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animateProgress)
+                }
+            }
+            .frame(height: 8)
+            
+            Text("\(score)%")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white, .white.opacity(0.9)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 40, alignment: .trailing)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.8).delay(0.2)) {
+                animateProgress = true
             }
         }
     }
 }
 
-struct BodyMetricEditCard: View {
-    let label: String
-    let value: String
-    let unit: String
-    let icon: String
-    let color: Color
-    let onEdit: () -> Void
+// MARK: - Steps and Miles Card
+
+struct StepsMilesCard: View {
+    let steps: Int
+    let miles: Double
+    let stepsGoal: Int
+    let stepsProgress: Double
+    let onEditSteps: (Int) -> Void
+    @State private var showEditSheet = false
+    @State private var editedGoal: Int
+    @State private var animateProgress = false
+    @State private var pulse = false
+    
+    init(steps: Int, miles: Double, stepsGoal: Int, stepsProgress: Double, onEditSteps: @escaping (Int) -> Void) {
+        self.steps = steps
+        self.miles = miles
+        self.stepsGoal = stepsGoal
+        self.stepsProgress = stepsProgress
+        self.onEditSteps = onEditSteps
+        self._editedGoal = State(initialValue: stepsGoal)
+    }
     
     var body: some View {
-        GlassCard(expand: false) {
-            VStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(
+        GlassCard {
+            VStack(spacing: 20) {
+                HStack {
+                    ZStack {
+                        // Enhanced glow effect
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color.cyan.opacity(0.5),
+                                        Color.blue.opacity(0.3),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 10,
+                                    endRadius: 35
+                                )
+                            )
+                            .frame(width: 70, height: 70)
+                            .blur(radius: 8)
+                            .opacity(pulse ? 0.8 : 0.5)
+                        
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.cyan.opacity(0.9), .blue.opacity(0.8)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 56, height: 56)
+                            .shadow(color: .cyan.opacity(0.5), radius: pulse ? 12 : 8, y: 4)
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.4), .white.opacity(0.2)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 2
+                                    )
+                            )
+                        
+                        Image(systemName: "figure.walk")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .symbolEffect(.pulse, value: pulse)
+                    }
+                    .scaleEffect(pulse ? 1.05 : 1.0)
+                    
+                    Text("Activity")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(
                             LinearGradient(
-                                colors: [color.opacity(0.7), color.opacity(0.5)],
+                                colors: [.white, .white.opacity(0.95)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 48, height: 48)
+                        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                    Spacer()
                     
-                    Image(systemName: icon)
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                }
-                
-                VStack(spacing: 4) {
-                    Text(value)
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(.white)
-                    
-                    if !unit.isEmpty {
-                        Text(unit)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
+                    Button {
+                        showEditSheet = true
+                        Hx.tap()
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                        .foregroundStyle(
+                            LinearGradient(
+                                    colors: [.white.opacity(0.9), .white.opacity(0.6)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                     }
-                    
-                    Text(label)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.8))
+                    .buttonStyle(.plain)
                 }
                 
-                Button {
-                    onEdit()
-                    Hx.tap()
-                } label: {
-                    Image(systemName: "pencil.circle.fill")
-                        .font(.subheadline)
+                HStack(spacing: 24) {
+                    // Steps
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(steps)")
+                                .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("steps")
+                                .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                .padding(.top, 4)
+                
+                        Text("\(Int(stepsProgress * 100))% of \(stepsGoal)")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                        
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.white.opacity(0.15))
+                        .frame(height: 8)
+                    
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                            colors: [.cyan, .blue],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                                    .frame(width: geo.size.width * CGFloat(stepsProgress), height: 8)
+                }
             }
-            .padding(18)
+            .frame(height: 8)
+                    }
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                        .frame(height: 60)
+                    
+                    // Miles
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(String(format: "%.1f", miles))
+                                .font(.system(size: 40, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("mi")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        
+                        Text("Distance")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditGoalSheet(
+                title: "Steps",
+                currentGoal: stepsGoal,
+                unit: "steps",
+                onSave: { newGoal in
+                    editedGoal = newGoal
+                    onEditSteps(newGoal)
+                    showEditSheet = false
+                    Hx.ok()
+                },
+                onCancel: {
+                    editedGoal = stepsGoal
+                    showEditSheet = false
+                }
+            )
         }
     }
 }
 
-#Preview {
-    NavigationStack {
-    HealthDashboardView()
+// MARK: - Vital Signs Card
+
+struct VitalSignsCard: View {
+    @ObservedObject var healthManager: HealthKitManager
+    
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Image(systemName: "heart.text.square.fill")
+                        .font(.title)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.red, .pink],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    Text("Vital Signs")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                }
+                
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ], spacing: 16) {
+                    if healthManager.healthData.systolicBP > 0 {
+                        VitalSignMetric(
+                            icon: "waveform.path.ecg",
+                            label: "Blood Pressure",
+                            value: "\(healthManager.healthData.systolicBP)/\(healthManager.healthData.diastolicBP)",
+                            unit: "mmHg",
+                            color: .red
+                        )
+                    }
+                    
+                    if healthManager.healthData.oxygenSaturation > 0 {
+                        VitalSignMetric(
+                            icon: "lungs.fill",
+                            label: "Oxygen",
+                            value: String(format: "%.1f", healthManager.healthData.oxygenSaturation),
+                            unit: "%",
+                        color: .blue
+                    )
+                    }
+                    
+                    if healthManager.healthData.respiratoryRate > 0 {
+                        VitalSignMetric(
+                            icon: "wind",
+                            label: "Respiratory Rate",
+                            value: "\(healthManager.healthData.respiratoryRate)",
+                            unit: "/min",
+                        color: .cyan
+                    )
+                    }
+                    
+                    if healthManager.healthData.bodyTemperature > 0 {
+                        VitalSignMetric(
+                            icon: "thermometer",
+                            label: "Temperature",
+                            value: String(format: "%.1f", healthManager.healthData.bodyTemperature),
+                            unit: "°F",
+                            color: .orange
+                        )
+                    }
+                }
+            }
+            .padding(24)
+        }
     }
 }
+
+struct VitalSignMetric: View {
+    let icon: String
+    let label: String
+    let value: String
+    let unit: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+                        Image(systemName: icon)
+                .font(.title3)
+                            .foregroundStyle(color)
+            
+            Text(label)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(unit)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.05))
+        )
+    }
+}
+
+// MARK: - Editable Water Card
+
+struct EditableWaterCard: View {
+    @ObservedObject var waterTracker: WaterTrackerManager
+    let onEdit: (Int) -> Void
+    @State private var showEditSheet = false
+    @State private var showWaterPicker = false
+    @State private var editedGoal: Int
+    
+    init(waterTracker: WaterTrackerManager, onEdit: @escaping (Int) -> Void) {
+        self.waterTracker = waterTracker
+        self.onEdit = onEdit
+        self._editedGoal = State(initialValue: Int(waterTracker.goal))
+    }
+    
+    var body: some View {
+        GlassCard {
+            VStack(spacing: 20) {
+                HStack {
+                    Image(systemName: "drop.fill")
+                        .font(.title)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .cyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    Text("Water Intake")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    
+                    Button {
+                        showEditSheet = true
+                        Hx.tap()
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                VStack(spacing: 16) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(String(format: "%.0f", waterTracker.todaysIntake))
+                            .font(.system(size: 48, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("oz")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    
+                    Text("\(Int(waterTracker.progress * 100))% of \(Int(waterTracker.goal)) oz goal")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.white.opacity(0.15))
+                                .frame(height: 12)
+                    
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                        colors: [.blue, .cyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                                .frame(width: geo.size.width * CGFloat(waterTracker.progress), height: 12)
+                        }
+                    }
+                    .frame(height: 12)
+                    
+                    // Quick Add Water Button
+                        Button {
+                        showWaterPicker = true
+                            Hx.tap()
+                        } label: {
+                        HStack {
+                                Image(systemName: "plus.circle.fill")
+                            Text("Add Water")
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                            .background(
+                                        LinearGradient(
+                                colors: [.blue.opacity(0.9), .cyan.opacity(0.9)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditGoalSheet(
+                title: "Water",
+                currentGoal: Int(waterTracker.goal),
+                unit: "oz",
+                onSave: { newGoal in
+                    editedGoal = newGoal
+                    onEdit(newGoal)
+                    showEditSheet = false
+                    Hx.ok()
+                },
+                onCancel: {
+                    editedGoal = Int(waterTracker.goal)
+                    showEditSheet = false
+                }
+            )
+        }
+        .sheet(isPresented: $showWaterPicker) {
+            WaterQuickAddSheet(tracker: waterTracker)
+        }
+    }
+}
+
+// MARK: - Editable Food Calories Card
+
+struct EditableFoodCaloriesCard: View {
+    @ObservedObject var foodTracker: FoodTrackerManager
+    let onEdit: (Int) -> Void
+    @State private var showEditSheet = false
+    @State private var showFoodTracker = false
+    @State private var editedGoal: Int
+    
+    init(foodTracker: FoodTrackerManager, onEdit: @escaping (Int) -> Void) {
+        self.foodTracker = foodTracker
+        self.onEdit = onEdit
+        let caloriesGoal = UserDefaults.standard.integer(forKey: "caloriesGoal")
+        self._editedGoal = State(initialValue: caloriesGoal > 0 ? caloriesGoal : 2000)
+    }
+    
+    var caloriesGoal: Int {
+        UserDefaults.standard.integer(forKey: "caloriesGoal") > 0 ? UserDefaults.standard.integer(forKey: "caloriesGoal") : 2000
+    }
+    
+    var progress: Double {
+        min(1.0, Double(foodTracker.todaysCalories) / Double(caloriesGoal))
+    }
+    
+    var body: some View {
+        GlassCard {
+            VStack(spacing: 20) {
+                HStack {
+                    Image(systemName: "fork.knife")
+                        .font(.title)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.green, .mint],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    Text("Food Calories")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                
+                Button {
+                        showEditSheet = true
+                        Hx.tap()
+                } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                VStack(spacing: 16) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(foodTracker.todaysCalories)")
+                            .font(.system(size: 48, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("kcal")
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    
+                    Text("\(Int(progress * 100))% of \(caloriesGoal) kcal goal")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                    
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.white.opacity(0.15))
+                                .frame(height: 12)
+                            
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(
+                        LinearGradient(
+                            colors: [.green, .mint],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                                .frame(width: geo.size.width * CGFloat(progress), height: 12)
+                        }
+                    }
+                    .frame(height: 12)
+                    
+                    // Add Food Button
+                Button {
+                    showFoodTracker = true
+                    Hx.tap()
+                } label: {
+                        HStack {
+                        Image(systemName: "plus.circle.fill")
+                            Text("Add Food")
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    .background(
+                                LinearGradient(
+                                colors: [.green.opacity(0.9), .mint.opacity(0.9)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditGoalSheet(
+                title: "Food Calories",
+                currentGoal: caloriesGoal,
+                unit: "kcal",
+                onSave: { newGoal in
+                    editedGoal = newGoal
+                    onEdit(newGoal)
+                    showEditSheet = false
+                    Hx.ok()
+                },
+                onCancel: {
+                    editedGoal = caloriesGoal
+                    showEditSheet = false
+                }
+            )
+        }
+        .sheet(isPresented: $showFoodTracker) {
+            NavigationStack {
+                FoodTrackerView()
+            }
+        }
+    }
+}
+
+// MARK: - Health Trend Charts Card
+
+struct HealthTrendChartsCard: View {
+    @ObservedObject var healthManager: HealthKitManager
+    @State private var selectedChart: TrendChartType = .steps
+    
+    enum TrendChartType: String, CaseIterable {
+        case steps = "Steps"
+        case calories = "Calories"
+        case sleep = "Sleep"
+        case heartRate = "Heart Rate"
+        
+        var icon: String {
+            switch self {
+            case .steps: return "figure.walk"
+            case .calories: return "flame.fill"
+            case .sleep: return "bed.double.fill"
+            case .heartRate: return "heart.fill"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .steps: return .cyan
+            case .calories: return .orange
+            case .sleep: return .indigo
+            case .heartRate: return .red
+            }
+        }
+    }
+    
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.title)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.purple, .blue],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    Text("Health Trends")
+                        .font(.title2.weight(.bold))
+                            .foregroundStyle(.white)
+                    Spacer()
+                    }
+                
+                // Chart Type Selector
+                ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                        ForEach(TrendChartType.allCases, id: \.self) { chartType in
+                        Button {
+                            withAnimation(.spring()) {
+                                    selectedChart = chartType
+                                }
+                                Hx.tap()
+                        } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: chartType.icon)
+                                        .font(.caption)
+                                    Text(chartType.rawValue)
+                                .font(.subheadline.weight(.semibold))
+                                }
+                                .foregroundStyle(selectedChart == chartType ? .white : .white.opacity(0.7))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(
+                                    Capsule()
+                                        .fill(selectedChart == chartType ? chartType.color.opacity(0.5) : Color.white.opacity(0.1))
+                                )
+                        }
+                    }
+                }
+            }
+                
+                // Chart Display
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.05))
+                        .frame(height: 200)
+                    
+                    switch selectedChart {
+                    case .steps:
+                        WeeklyStepsTrendChart(steps: healthManager.healthData.weeklySteps)
+                    case .calories:
+                        CaloriesTrendChart(healthManager: healthManager)
+                    case .sleep:
+                        SleepTrendChart(healthManager: healthManager)
+                    case .heartRate:
+                        HeartRateTrendChart(healthManager: healthManager)
+                    }
+                }
+            }
+            .padding(24)
+        }
+    }
+}
+
+// MARK: - Trend Chart Components
+
+struct WeeklyStepsTrendChart: View {
+    let steps: [Date: Int]
+    
+    var sortedSteps: [(Date, Int)] {
+        steps.sorted { $0.key < $1.key }
+    }
+    
+    var maxSteps: Int {
+        sortedSteps.map { $0.1 }.max() ?? 1
+    }
+    
+    var body: some View {
+        if !sortedSteps.isEmpty {
+            HStack(alignment: .bottom, spacing: 8) {
+                ForEach(Array(sortedSteps.enumerated()), id: \.offset) { index, item in
+                    VStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4)
+                        .fill(
+                            LinearGradient(
+                                    colors: [.cyan, .blue],
+                                    startPoint: .bottom,
+                                    endPoint: .top
+                                )
+                            )
+                            .frame(width: 30, height: max(4, CGFloat(item.1) / CGFloat(maxSteps) * 160))
+                        
+                        Text(dayAbbreviation(index))
+                            .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+            .frame(height: 200)
+            .padding(.horizontal, 8)
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.white.opacity(0.5))
+                Text("No data available")
+                        .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+    
+    private func dayAbbreviation(_ index: Int) -> String {
+        let calendar = Calendar.current
+        let today = calendar.component(.weekday, from: Date())
+        let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let dayIndex = (today - 7 + index) % 7
+        return days[dayIndex]
+    }
+}
+
+struct CaloriesTrendChart: View {
+    @ObservedObject var healthManager: HealthKitManager
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                        LinearGradient(
+                                colors: [.orange, .red],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(width: 50, height: CGFloat(min(150, Double(healthManager.healthData.activeCalories) / 5.0)))
+                    
+                    Text("Active")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                
+                VStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: [.green, .mint],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(width: 50, height: CGFloat(min(150, Double(healthManager.healthData.dietaryCalories) / 10.0)))
+                    
+                    Text("Food")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            .frame(height: 170)
+            
+            Text("Today's Calories")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct SleepTrendChart: View {
+    @ObservedObject var healthManager: HealthKitManager
+    
+    var body: some View {
+        VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                    .stroke(Color.white.opacity(0.15), lineWidth: 16)
+                    .frame(width: 120, height: 120)
+                    
+                    Circle()
+                    .trim(from: 0, to: CGFloat(healthManager.healthData.sleepHours / 8.0))
+                        .stroke(
+                        LinearGradient(
+                            colors: [.indigo, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                    .frame(width: 120, height: 120)
+                
+                        VStack(spacing: 4) {
+                    Text(String(format: "%.1f", healthManager.healthData.sleepHours))
+                        .font(.title2.weight(.bold))
+                                .foregroundStyle(.white)
+                    Text("hours")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            
+            Text("Last Night's Sleep")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct HeartRateTrendChart: View {
+    @ObservedObject var healthManager: HealthKitManager
+    
+    var body: some View {
+        VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                    .stroke(Color.white.opacity(0.15), lineWidth: 16)
+                    .frame(width: 120, height: 120)
+                
+                if healthManager.healthData.heartRate > 0 {
+                    Circle()
+                        .trim(from: 0, to: CGFloat(Double(healthManager.healthData.heartRate) / 100.0))
+                        .stroke(
+                            LinearGradient(
+                                colors: [.red, .pink],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 120, height: 120)
+                }
+                
+                VStack(spacing: 4) {
+                    Text(healthManager.healthData.heartRate > 0 ? "\(healthManager.healthData.heartRate)" : "--")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text("bpm")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+            }
+            
+            Text("Resting Heart Rate")
+                .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+        .frame(maxWidth: .infinity)
+    }
+}
+

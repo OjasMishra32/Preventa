@@ -30,9 +30,13 @@ struct HealthStatsPreviewCard: View {
                             .symbolEffect(.pulse, value: pulse)
                     }
                     .onAppear {
+                        pulse = true
                         withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                            pulse = true
+                            pulse = false
                         }
+                    }
+                    .onDisappear {
+                        pulse = false
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {

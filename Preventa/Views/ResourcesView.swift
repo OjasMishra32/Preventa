@@ -94,7 +94,7 @@ struct ResourcesView: View {
                 }
             }
         }
-        .navigationTitle("Healthcare Resources")
+        .navigationTitle("Resources")
         .navigationBarTitleDisplayMode(.large)
         .sheet(item: $showResourceDetail) { resource in
             ResourceDetailSheet(resource: resource, vm: vm)
@@ -143,7 +143,7 @@ struct SophisticatedHeaderView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Healthcare Resources")
+                    Text("Resources")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
                     
@@ -685,13 +685,17 @@ struct SophisticatedResourceCard: View {
                             )
                         }
                         
-                        if resource.website != nil {
+                        if let website = resource.website {
                             ResourceActionButton(
                                 icon: "safari",
                                 title: "Website",
                                 color: .blue,
                                 action: {
-                                    if let url = resource.website, let webURL = URL(string: url) {
+                                    var urlString = website
+                                    if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
+                                        urlString = "https://\(urlString)"
+                                    }
+                                    if let webURL = URL(string: urlString) {
                                         UIApplication.shared.open(webURL)
                                     }
                                     Hx.tap()
@@ -845,7 +849,11 @@ struct ResourceDetailSheet: View {
                                     subtitle: "Open in browser",
                                     color: .blue,
                                     action: {
-                                        if let url = URL(string: website) {
+                                        var urlString = website
+                                        if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
+                                            urlString = "https://\(urlString)"
+                                        }
+                                        if let url = URL(string: urlString) {
                                             UIApplication.shared.open(url)
                                         }
                                         Hx.tap()
@@ -1040,7 +1048,15 @@ final class ResourcesVM: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     
     var filteredResources: [HealthcareResource] {
-        resources.filter { $0.category == selectedCategory.rawValue || ($0.category == "Hotlines" && selectedCategory == .hotlines) }
+        let filtered = resources.filter { $0.category == selectedCategory.rawValue || ($0.category == "Hotlines" && selectedCategory == .hotlines) }
+        
+        // Sort by distance if available, otherwise by name
+        return filtered.sorted { first, second in
+            if let d1 = first.distance, let d2 = second.distance {
+                return d1 < d2
+            }
+            return first.name < second.name
+        }
     }
     
     override init() {
@@ -1053,11 +1069,26 @@ final class ResourcesVM: NSObject, ObservableObject {
     }
     
     func requestLocationPermission() {
-        locationManager.requestWhenInUseAuthorization()
+        let status = locationManager.authorizationStatus
+        if status == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
+        } else if status == .denied || status == .restricted {
+            // Show alert that location is needed
+            DispatchQueue.main.async {
+                self.hasLocationPermission = false
+            }
+        } else {
+            // Already authorized, start location updates
+            locationManager.desiredAccuracy = kCLLocationAccuracyBest
+            locationManager.startUpdatingLocation()
+        }
     }
     
     func loadResources() {
         isLoading = true
+        
+        // Clear existing resources except hotlines
+        resources.removeAll()
         
         // Always load hotlines (don't need location)
         let defaultHotlines = [
@@ -1070,61 +1101,178 @@ final class ResourcesVM: NSObject, ObservableObject {
         resources.append(contentsOf: defaultHotlines)
         
         // Load local resources if location is available
-        if hasLocationPermission, let location = locationManager.location {
-            searchNearbyResources(location: location)
+        if hasLocationPermission {
+            if let location = locationManager.location {
+                searchNearbyResources(location: location)
+            } else {
+                // Request location update
+                locationManager.desiredAccuracy = kCLLocationAccuracyBest
+                locationManager.startUpdatingLocation()
+                // Wait a bit for location to be available
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    if let location = self.locationManager.location {
+                        self.searchNearbyResources(location: location)
+                    } else {
+                        self.isLoading = false
+                    }
+                }
+            }
         } else {
             isLoading = false
         }
     }
     
     private func searchNearbyResources(location: CLLocation) {
-        let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = "urgent care OR hospital OR clinic"
-        searchRequest.region = MKCoordinateRegion(
-            center: location.coordinate,
-            latitudinalMeters: 10000,
-            longitudinalMeters: 10000
-        )
+        // Search for different categories
+        let categories = [
+            ("urgent care", "Urgent Care"),
+            ("hospital", "Emergency"),
+            ("clinic", "Primary Care"),
+            ("medical center", "Primary Care"),
+            ("health center", "Primary Care")
+        ]
         
-        let search = MKLocalSearch(request: searchRequest)
-        search.start { [weak self] response, _ in
-            guard let self = self, let mapItems = response?.mapItems else {
-                DispatchQueue.main.async {
-                    self?.isLoading = false
+        var allResults: [HealthcareResource] = []
+        let group = DispatchGroup()
+        
+        for (query, _) in categories {
+            group.enter()
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = query
+            searchRequest.region = MKCoordinateRegion(
+                center: location.coordinate,
+                latitudinalMeters: 15000, // 15km radius
+                longitudinalMeters: 15000
+            )
+            
+            let search = MKLocalSearch(request: searchRequest)
+            search.start { response, error in
+                defer { group.leave() }
+                
+                guard let mapItems = response?.mapItems else { return }
+                
+                let mapped = mapItems.prefix(10).compactMap { item -> HealthcareResource? in
+                    let distance = location.distance(from: CLLocation(
+                        latitude: item.placemark.coordinate.latitude,
+                        longitude: item.placemark.coordinate.longitude
+                    )) / 1609.34
+                    
+                    let category = self.determineCategory(item)
+                    
+                    // Filter out veterinarians and excluded items
+                    if category == "EXCLUDE" {
+                        return nil
+                    }
+                    
+                    // Clean phone number
+                    let phone = item.phoneNumber?.replacingOccurrences(of: " ", with: "")
+                        .replacingOccurrences(of: "-", with: "")
+                        .replacingOccurrences(of: "(", with: "")
+                        .replacingOccurrences(of: ")", with: "")
+                    
+                    // Ensure website URL is properly formatted
+                    var website: String? = nil
+                    if let url = item.url {
+                        if url.scheme == nil {
+                            website = "https://\(url.absoluteString)"
+                        } else {
+                            website = url.absoluteString
+                        }
+                    }
+                    
+                    return HealthcareResource(
+                        name: item.name ?? "Unknown",
+                        category: category,
+                        address: item.placemark.formattedAddress,
+                        phone: phone,
+                        website: website,
+                        distance: distance,
+                        location: item.placemark.coordinate
+                    )
                 }
-                return
+                
+                allResults.append(contentsOf: mapped)
+            }
+        }
+        
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self else { return }
+            // Remove duplicates and sort by distance
+            var uniqueResources: [HealthcareResource] = []
+            var seenNames: Set<String> = []
+            
+            // Filter out veterinarians and sort properly
+            let filtered = allResults.filter { resource in
+                let name = resource.name.lowercased()
+                return !name.contains("veterinary") && 
+                       !name.contains("vet ") && 
+                       !name.contains("animal") && 
+                       !name.contains("pet ")
             }
             
-            let mapped = mapItems.prefix(15).map { [weak self] item -> HealthcareResource in
-                guard let self = self else {
-                    return HealthcareResource(name: "Unknown", category: "Primary Care")
+            // Sort by distance, then by category priority
+            let sorted = filtered.sorted { first, second in
+                if let d1 = first.distance, let d2 = second.distance {
+                    if abs(d1 - d2) < 0.5 { // If very close, sort by category
+                        return self.categoryPriority(first.category) < self.categoryPriority(second.category)
+                    }
+                    return d1 < d2
                 }
-                let distance = location.distance(from: CLLocation(latitude: item.placemark.coordinate.latitude, longitude: item.placemark.coordinate.longitude)) / 1609.34
-                return HealthcareResource(
-                    name: item.name ?? "Unknown",
-                    category: self.determineCategory(item),
-                    address: item.placemark.formattedAddress,
-                    phone: item.phoneNumber?.replacingOccurrences(of: " ", with: ""),
-                    website: item.url?.absoluteString,
-                    distance: distance,
-                    location: item.placemark.coordinate
-                )
+                return (first.distance ?? 999) < (second.distance ?? 999)
             }
             
-            DispatchQueue.main.async {
-                self.resources.append(contentsOf: mapped)
-                self.isLoading = false
+            for resource in sorted {
+                let key = resource.name.lowercased().trimmingCharacters(in: .whitespaces)
+                if !seenNames.contains(key) && !key.isEmpty {
+                    seenNames.insert(key)
+                    uniqueResources.append(resource)
+                }
             }
+            
+            // Group by category and limit per category
+            var categoryCounts: [String: Int] = [:]
+            var finalResources: [HealthcareResource] = []
+            
+            for resource in uniqueResources {
+                let count = categoryCounts[resource.category] ?? 0
+                if count < 10 { // Max 10 per category
+                    finalResources.append(resource)
+                    categoryCounts[resource.category] = count + 1
+                }
+            }
+            
+            self.resources.append(contentsOf: finalResources)
+            self.isLoading = false
+        }
+    }
+    
+    private func categoryPriority(_ category: String) -> Int {
+        switch category {
+        case "Urgent Care": return 1
+        case "Emergency": return 2
+        case "Primary Care": return 3
+        case "Mental Health": return 4
+        case "Specialists": return 5
+        default: return 6
         }
     }
     
     private func determineCategory(_ item: MKMapItem) -> String {
         let name = (item.name ?? "").lowercased()
-        if name.contains("urgent") || name.contains("emergency") {
+        let category = (item.pointOfInterestCategory?.rawValue ?? "").lowercased()
+        
+        // Filter out veterinarians and animal-related facilities
+        if name.contains("veterinary") || name.contains("vet") || name.contains("animal") || name.contains("pet") || 
+           category.contains("veterinary") || category.contains("animal") {
+            return "EXCLUDE" // Will be filtered out
+        }
+        
+        if name.contains("urgent") || name.contains("emergency") || name.contains("er ") {
             return "Urgent Care"
-        } else if name.contains("hospital") {
+        } else if name.contains("hospital") || category.contains("hospital") {
             return "Emergency"
-        } else if name.contains("clinic") || name.contains("medical") {
+        } else if name.contains("clinic") || name.contains("medical") || name.contains("health center") || 
+                  category.contains("clinic") || category.contains("medical") {
             return "Primary Care"
         } else {
             return "Primary Care"
@@ -1143,7 +1291,27 @@ extension ResourcesVM: CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         checkLocationPermission()
         if hasLocationPermission {
+            locationManager.desiredAccuracy = kCLLocationAccuracyBest
+            locationManager.startUpdatingLocation()
             loadResources()
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        // Stop updating to save battery
+        locationManager.stopUpdatingLocation()
+        
+        // Search for nearby resources if we haven't loaded them yet
+        if resources.filter({ $0.category != "Hotlines" }).isEmpty {
+            searchNearbyResources(location: location)
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("❌ ResourcesVM: Location error: \(error.localizedDescription)")
+        DispatchQueue.main.async {
+            self.isLoading = false
         }
     }
 }

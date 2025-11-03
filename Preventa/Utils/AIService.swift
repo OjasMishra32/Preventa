@@ -18,7 +18,7 @@ final class AIService {
         return key.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
-    private let model = "gemini-2.0-flash-lite-001"  // Google Gemini lite model with better rate limits
+    private let model = "gemini-2.5-flash-lite"  // Gemini 2.5 Flash Lite with higher rate limits
     
     // MARK: - Generic AI Completion
     
@@ -42,8 +42,11 @@ final class AIService {
             fullSystemPrompt += "\n\nContext:\n\(contextStr)"
         }
         
-        // Gemini API endpoint - use v1beta with gemini-2.0-flash-001 (stable model)
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)")!
+        // Gemini API endpoint - use v1beta with Gemini 2.5 Flash Lite
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)") else {
+            print("❌ AI: Invalid Gemini API URL")
+            return nil
+        }
         
         // Build Gemini content structure
         let contents: [[String: Any]] = [

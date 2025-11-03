@@ -767,23 +767,37 @@ struct DoseRow: View {
 struct EmptyState: View {
     let theme: [Color]
     var body: some View {
-        VStack(spacing: 18) {
-            Text("No medications scheduled today")
-                .foregroundColor(.white.opacity(0.9))
-            Text("Add medications and times to see them here")
-                .font(.footnote)
-                .foregroundColor(.white.opacity(0.8))
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: theme.map { $0.opacity(0.3) },
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "pills.fill")
+                    .font(.system(size: 48, weight: .light))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            
+            VStack(spacing: 8) {
+                Text("No Medications Today")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                
+                Text("Add medications and set reminder times to track your daily doses.")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
-                )
-        )
+        .padding(.vertical, 40)
     }
 }
 struct WeekStrip: View {

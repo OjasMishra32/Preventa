@@ -180,6 +180,9 @@ struct HomeView: View {
                     MeView() // Settings redirects to Me
                 case .healthStats:
                     HealthDashboardView()
+                        .environmentObject(HealthKitManager.shared)
+                        .environmentObject(FoodTrackerManager.shared)
+                        .environmentObject(WaterTrackerManager.shared)
                 }
             }
         }

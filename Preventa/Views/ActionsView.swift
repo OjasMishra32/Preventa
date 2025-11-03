@@ -86,7 +86,7 @@ struct ActionsView: View {
                                 .foregroundStyle(.white)
                         }
                     }
-                    .padding()
+                    .padding(20)
                 }
             }
         }
@@ -1151,16 +1151,31 @@ final class ActionsVM: ObservableObject {
     private let db = Firestore.firestore()
     private var uid: String? { Auth.auth().currentUser?.uid }
     
+    // Store listener reference for cleanup
+    private var actionsListener: ListenerRegistration?
+    
+    deinit {
+        stopListening()
+    }
+    
     func loadActions() {
+        // Remove existing listener if any
+        stopListening()
+        
         guard let uid else { return }
-        db.collection("users").document(uid).collection("actions")
+        actionsListener = db.collection("users").document(uid).collection("actions")
             .order(by: "createdAt", descending: true)
-            .addSnapshotListener { snapshot, _ in
-                guard let docs = snapshot?.documents else { return }
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let self = self, let docs = snapshot?.documents else { return }
                 self.actions = docs.compactMap { doc in
                     try? doc.data(as: ActionItem.self)
                 }
             }
+    }
+    
+    func stopListening() {
+        actionsListener?.remove()
+        actionsListener = nil
     }
     
     func toggleAction(_ action: ActionItem) {

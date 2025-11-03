@@ -1144,22 +1144,37 @@ final class VisualChecksVM: ObservableObject {
     private let db = Firestore.firestore()
     private var uid: String? { Auth.auth().currentUser?.uid }
     
+    // Store listener reference for cleanup
+    private var photosListener: ListenerRegistration?
+    
     var filteredPhotos: [VisualPhoto] {
         photos.filter { $0.category == selectedCategory.rawValue }
     }
     
     var selectedCategory: VisualChecksView.PhotoCategory = .skin
     
+    deinit {
+        stopListening()
+    }
+    
     func loadPhotos() {
+        // Remove existing listener if any
+        stopListening()
+        
         guard let uid else { return }
-        db.collection("users").document(uid).collection("visualPhotos")
+        photosListener = db.collection("users").document(uid).collection("visualPhotos")
             .order(by: "createdAt", descending: true)
-            .addSnapshotListener { snapshot, _ in
-                guard let docs = snapshot?.documents else { return }
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let self = self, let docs = snapshot?.documents else { return }
                 self.photos = docs.compactMap { doc in
                     try? doc.data(as: VisualPhoto.self)
                 }
             }
+    }
+    
+    func stopListening() {
+        photosListener?.remove()
+        photosListener = nil
     }
     
     func uploadPhoto(image: UIImage, category: String) {

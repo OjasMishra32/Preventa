@@ -54,6 +54,9 @@ struct PreventaApp: App {
             .environmentObject(foodTracker)
             .environmentObject(waterTracker)
             .task {
+                // Refresh authorization status when app opens
+                healthManager.checkAuthorizationStatus()
+                
                 // Initialize FoodTrackerManager after Firebase is configured
                 if let user = Auth.auth().currentUser, user.isEmailVerified {
                     foodTracker.initialize()
@@ -65,8 +68,14 @@ struct PreventaApp: App {
                         isLoggedIn = true
                         // Initialize food tracker when user logs in
                         foodTracker.initialize()
-                        // Show permissions on first login
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        
+                        // Refresh authorization status on login
+                        healthManager.checkAuthorizationStatus()
+                        
+                        // Only show permissions if truly not authorized (after checking status)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            // Double-check authorization status after a brief delay
+                            healthManager.checkAuthorizationStatus()
                             if !healthManager.isAuthorized {
                                 showPermissions = true
                             }
@@ -75,6 +84,10 @@ struct PreventaApp: App {
                         isLoggedIn = false
                     }
                 }
+            }
+            .onAppear {
+                // Refresh authorization status when app appears
+                healthManager.checkAuthorizationStatus()
             }
         }
     }

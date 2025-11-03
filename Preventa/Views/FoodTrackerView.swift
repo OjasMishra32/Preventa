@@ -109,13 +109,16 @@ struct FoodTrackerView: View {
                     Text("Or Enter Manually")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
                     
                     // Meal type selector
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(spacing: 8) {
                         Text("Meal Type")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(FoodEntry.MealType.allCases, id: \.self) { type in
@@ -135,24 +138,32 @@ struct FoodTrackerView: View {
                     }
                     
                     // Food name
-                    TextField("Food name", text: $vm.foodName)
-                        .padding(12)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.white)
-                    
-                    // Calories
-                    HStack {
-                        Text("Calories")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Food Name")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
-                        Spacer()
-                        TextField("", value: $vm.calories, format: .number)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                        TextField("Food name", text: $vm.foodName)
                             .padding(12)
                             .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                             .foregroundStyle(.white)
-                            .frame(width: 100)
+                            .multilineTextAlignment(.center)
+                    }
+                    
+                    // Calories
+                    VStack(spacing: 8) {
+                        Text("Calories")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                        TextField("", value: $vm.calories, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .padding(12)
+                            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(.white)
                     }
                     
                     // Save button
@@ -187,6 +198,7 @@ struct FoodTrackerView: View {
                         )
                     }
                     .disabled(vm.foodName.isEmpty || vm.calories <= 0)
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -358,20 +370,27 @@ struct PhotoUploadCard: View {
                     Text("Take a Photo")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                     
                     Text("AI will analyze your meal and predict calories")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.85))
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
                 .padding(32)
             }
         }
         .buttonStyle(.plain)
         .onAppear {
+            pulse = true
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                pulse = true
+                pulse = false
             }
+        }
+        .onDisappear {
+            pulse = false
         }
     }
 }
@@ -598,7 +617,7 @@ final class FoodTrackerVM: ObservableObject {
         let base64Image = jpegData.base64EncodedString()
         
         // Build Gemini API request
-        let model = "gemini-2.0-flash-lite-001"
+        let model = "gemini-2.5-flash-lite"
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)") else {
             print("❌ FoodTracker: Invalid API URL")
             return nil
