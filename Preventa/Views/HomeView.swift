@@ -179,10 +179,7 @@ struct HomeView: View {
                 case .settings:
                     MeView() // Settings redirects to Me
                 case .healthStats:
-                    HealthDashboardView()
-                        .environmentObject(HealthKitManager.shared)
-                        .environmentObject(FoodTrackerManager.shared)
-                        .environmentObject(WaterTrackerManager.shared)
+                    HealthDashboardWrapperView()
                 }
             }
         }
@@ -196,6 +193,21 @@ enum Route: Hashable {
     case plan, meds, medsToday, learn
     case visualChecks, checkIns, actionPlans
     case resources, me, settings, healthStats
+}
+
+// MARK: - Health Dashboard Wrapper
+
+struct HealthDashboardWrapperView: View {
+    @EnvironmentObject var healthManager: HealthKitManager
+    @EnvironmentObject var foodTracker: FoodTrackerManager
+    @EnvironmentObject var waterTracker: WaterTrackerManager
+    
+    var body: some View {
+        HealthDashboardView()
+            .environmentObject(healthManager)
+            .environmentObject(foodTracker)
+            .environmentObject(waterTracker)
+    }
 }
 
 // MARK: - ViewModel

@@ -113,6 +113,7 @@ struct HealthDashboardView: View {
         }
         .sheet(isPresented: $showSettings) {
             HealthSettingsView()
+                .environmentObject(healthManager)
         }
         .task {
             // Load data immediately on appear with error handling
@@ -258,9 +259,9 @@ struct TodayTabView: View {
             HStack(spacing: 16) {
                 StepsMilesCard(
                     steps: healthManager.healthData.steps,
-                    miles: healthManager.healthData.miles,
+                    miles: max(0, healthManager.healthData.miles),
                     stepsGoal: healthManager.healthData.stepsGoal,
-                    stepsProgress: healthManager.healthData.stepsProgress,
+                    stepsProgress: max(0, min(1.0, healthManager.healthData.stepsProgress)),
                     onEditSteps: { newGoal in
                         UserDefaults.standard.set(newGoal, forKey: "stepsGoal")
                         Task {
@@ -1877,7 +1878,7 @@ struct QuickHealthStatsBar: View {
                     value: "\(healthManager.healthData.activeCalories)",
                     label: "Cal",
                     color: .orange,
-                    progress: min(1.0, Double(healthManager.healthData.activeCalories) / 500.0)
+                    progress: min(1.0, max(0.0, Double(healthManager.healthData.activeCalories) / 500.0))
                 )
                 
                 QuickStatPill(
@@ -1890,18 +1891,18 @@ struct QuickHealthStatsBar: View {
                 
                 QuickStatPill(
                     icon: "drop.fill",
-                    value: String(format: "%.0f", healthManager.healthData.waterIntakeOz),
+                    value: String(format: "%.0f", max(0.0, healthManager.healthData.waterIntakeOz)),
                     label: "oz",
                     color: .blue,
-                    progress: healthManager.healthData.waterProgress
+                    progress: min(1.0, max(0.0, healthManager.healthData.waterProgress))
                 )
                 
                 QuickStatPill(
                     icon: "bed.double.fill",
-                    value: String(format: "%.1f", healthManager.healthData.sleepHours),
+                    value: String(format: "%.1f", max(0.0, healthManager.healthData.sleepHours)),
                     label: "hrs",
                     color: .indigo,
-                    progress: min(1.0, healthManager.healthData.sleepHours / 8.0)
+                    progress: min(1.0, max(0.0, healthManager.healthData.sleepHours / 8.0))
                 )
             }
             .padding(.horizontal, 4)
@@ -2279,7 +2280,7 @@ struct ComprehensiveHealthScoreCard: View {
                     
                         // Animated progress circle with glow
                     Circle()
-                            .trim(from: 0, to: animateScore ? CGFloat(healthScore / 100.0) : 0)
+                            .trim(from: 0, to: animateScore ? CGFloat(min(100.0, max(0.0, healthScore)) / 100.0) : 0)
                         .stroke(
                             AngularGradient(
                                     gradient: Gradient(colors: scoreColors + scoreColors),
